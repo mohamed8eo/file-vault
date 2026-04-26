@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -13,6 +14,7 @@ import (
 	"github.com/mohamed8eo/file-vault/internal/db"
 	"github.com/mohamed8eo/file-vault/internal/handler"
 	"github.com/mohamed8eo/file-vault/internal/middleware"
+	"github.com/redis/go-redis/v9"
 )
 
 type apiConfig struct {
@@ -30,10 +32,7 @@ func main() {
 
 	dbURL := os.Getenv("DB_URL")
 	if dbURL == "" {
-		log.Fatal("DB_URL must be set")
-	}
-
-	conn, err := pgx.Connect(context.Background(), dbURL)
+		log.Fatal("DB_URL must be set") } conn, err := pgx.Connect(context.Background(), dbURL)
 	if err != nil {
 		log.Fatalf("error: %s\n", err.Error())
 	}
@@ -48,7 +47,12 @@ func main() {
 
 	refreshTokenSecret := os.Getenv("REFRESH_TOKEN_SECRET")
 	if refreshTokenSecret == "" {
-		log.Fatal("refreshTokenSecret  must be set")
+		log.Fatal("refreshTokenSecret must be set")
+	}
+
+	redisURL := os.Getenv("REDIS_URL")
+	if redisURL == "" {
+		log.Fatal("radis must be set")
 	}
 
 	isProduction := os.Getenv("IS_PRODUCTION") == "true"
@@ -95,28 +99,42 @@ func main() {
 		cfg.refreshTokenSecret,
 		cfg.isProduction,
 	)
-	uploadHanlder := handler.NewUploadHandler(
+	uploadHandler := handler.NewUploadHandler(
 		cfg.dbQueries,
 		cfg.s3Bucket,
 		cfg.s3Region,
 		cfg.s3Client,
 	)
 
+	parseRedisURL, err := redis.ParseURL(redisURL)
+	if err != nil {
+		log.Fatalf("error: %s\n", err.Error())
+	}
+
+	rdb := redis.NewClient(parseRedisURL)
+
 	authMiddleware := middleware.Auth(cfg.accessTokenSecret)
 
-	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Hello"))
-	})
-	// authentication route.
-	mux.HandleFunc("POST /auth/sign-up", auth.SignUp)
-	mux.HandleFunc("POST /auth/login", auth.Login)
-	mux.HandleFunc("POST /auth/refresh", auth.Refresh)
-	mux.HandleFunc("POST /auth/logout", auth.Logout)
+	// Customize RateLimit
+	loginRateLimit := middleware.RateLimit(rdb, 10, time.Minute)
+	uploadRateLimit := middleware.RateLimit(rdb, 20, time.Minute)
+	generalRateLimit := middleware.RateLimit(rdb, 100, time.Minute)
 
-	mux.Handle("POST /upload", authMiddleware(http.HandlerFunc(uploadHanlder.UploadFile)))
-	mux.Handle("GET /files", authMiddleware(http.HandlerFunc(uploadHanlder.GetFiles)))
-	mux.Handle("GET /files/{id}", authMiddleware(http.HandlerFunc(uploadHanlder.GetFileByID)))
-	mux.Handle("DELETE /files/{id}", authMiddleware(http.HandlerFunc(uploadHanlder.DeleteFile)))
+	mux.Handle("GET /", generalRateLimit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("Hello"))
+	})))
+
+	// authentication route.
+	mux.Handle("POST /auth/sign-up", loginRateLimit(http.HandlerFunc(auth.SignUp)))
+	mux.Handle("POST /auth/login", loginRateLimit(http.HandlerFunc(auth.Login)))
+	mux.Handle("POST /auth/refresh", loginRateLimit(http.HandlerFunc(auth.Refresh)))
+	mux.Handle("POST /auth/logout", loginRateLimit(http.HandlerFunc(auth.Logout)))
+
+	// upload route.
+	mux.Handle("POST /upload", uploadRateLimit(authMiddleware(http.HandlerFunc(uploadHandler.UploadFile))))
+	mux.Handle("GET /files", generalRateLimit(authMiddleware(http.HandlerFunc(uploadHandler.GetFiles))))
+	mux.Handle("GET /files/{id}", generalRateLimit(authMiddleware(http.HandlerFunc(uploadHandler.GetFileByID))))
+	mux.Handle("DELETE /files/{id}", generalRateLimit(authMiddleware(http.HandlerFunc(uploadHandler.DeleteFile))))
 
 	log.Println("DB is running")
 	log.Printf("server is running on PORT: %s\n", port)
