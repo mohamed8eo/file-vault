@@ -11,7 +11,7 @@ type contextKey string
 
 const UserIDKey contextKey = "userID"
 
-func Auth(secret string) func(http.Handler) http.Handler {
+func Auth(accessTokenSercret string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authorizationHeader := r.Header.Get("Authorization")
@@ -20,7 +20,7 @@ func Auth(secret string) func(http.Handler) http.Handler {
 				http.Error(w, err.Error(), http.StatusUnauthorized)
 				return
 			}
-			userID, err := auth.ValidateJWT(secret, accessToken)
+			userID, err := auth.ValidateJWT(accessTokenSercret, accessToken)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusUnauthorized)
 				return

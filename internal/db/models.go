@@ -8,6 +8,14 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type File struct {
+	ID        pgtype.UUID
+	UserID    pgtype.UUID
+	FileName  string
+	FileUrl   string
+	CreatedAt pgtype.Timestamptz
+}
+
 type RefreshToken struct {
 	Token     string
 	UserID    pgtype.UUID
