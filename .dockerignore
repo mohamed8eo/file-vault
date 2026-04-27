@@ -1,0 +1,15 @@
+.git
+.gitignore
+.env
+.air.toml
+Makefile
+README.md
+LICENSE
+testing.txt
+testing.pdf
+tmp
+sql
+sqlc.yaml
+go.sum
+*.md
+*_test.go
