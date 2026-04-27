@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -28,11 +30,17 @@ type apiConfig struct {
 }
 
 func main() {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	slog.SetDefault(logger)
+
 	godotenv.Load(".env")
 
 	dbURL := os.Getenv("DB_URL")
 	if dbURL == "" {
-		log.Fatal("DB_URL must be set") } conn, err := pgx.Connect(context.Background(), dbURL)
+		log.Fatal("DB_URL must be set")
+	}
+
+	conn, err := pgx.Connect(context.Background(), dbURL)
 	if err != nil {
 		log.Fatalf("error: %s\n", err.Error())
 	}
@@ -136,9 +144,33 @@ func main() {
 	mux.Handle("GET /files/{id}", generalRateLimit(authMiddleware(http.HandlerFunc(uploadHandler.GetFileByID))))
 	mux.Handle("DELETE /files/{id}", generalRateLimit(authMiddleware(http.HandlerFunc(uploadHandler.DeleteFile))))
 
-	log.Println("DB is running")
-	log.Printf("server is running on PORT: %s\n", port)
-	if err := http.ListenAndServe(":"+port, mux); err != nil {
-		log.Fatalf("error to make server runn,err: %s", err)
+	// wrap entire mux with logging + request ID middleware
+	// wrappedMux := middleware.Logging(middleware.RequestID(mux))
+	wrappedMux := middleware.RequestID(middleware.Logging(mux))
+
+	srv := &http.Server{
+		Addr:    ":" + port,
+		Handler: wrappedMux,
 	}
+
+	// ShutDown
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+	go func() {
+		slog.Info("server starting", "port", port)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("server error", "err", err)
+			os.Exit(1)
+		}
+	}()
+	<-ctx.Done()
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		slog.Error("shutdown error", "err", err)
+	}
+
+	slog.Info("server stopped")
 }
