@@ -20,7 +20,12 @@ var authCmd = &cobra.Command{
 var loginCmd = &cobra.Command{
 	Use:   "login",
 	Short: "Login to file vault",
+	Aliases: []string{"in"},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		provider, _ := cmd.Flags().GetString("provider")
+		if provider == "google" || provider == "github" {
+			return client.OAuthLogin(provider)
+		}
 		email, err := cmd.Flags().GetString("email")
 		if err != nil {
 			log.Fatalf("error: %s\n", err.Error())
@@ -37,6 +42,7 @@ var loginCmd = &cobra.Command{
 var registerCmd = &cobra.Command{
 	Use:   "register",
 	Short: "Register a new account",
+	Aliases: []string{"reg"},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name, err := cmd.Flags().GetString("name")
 		if err != nil {
@@ -59,6 +65,7 @@ var registerCmd = &cobra.Command{
 var statusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Check login status",
+	Aliases: []string{"st"},
 	Run: func(cmd *cobra.Command, args []string) {
 		client.Status()
 	},
@@ -67,20 +74,20 @@ var statusCmd = &cobra.Command{
 var logoutCmd = &cobra.Command{
 	Use:   "logout",
 	Short: "log out from app",
+	Aliases: []string{"out"},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return client.Logout()
 	},
 }
 
 func init() {
-	loginCmd.Flags().String("email", "", "your email")
-	loginCmd.Flags().String("password", "", "your password")
-	loginCmd.MarkFlagRequired("email")
-	loginCmd.MarkFlagRequired("password")
+	loginCmd.Flags().StringP("email", "e", "", "your email")
+	loginCmd.Flags().StringP("password", "p", "", "your password")
+	loginCmd.Flags().StringP("provider", "P", "", "oauth provider (google, github)")
 
-	registerCmd.Flags().String("name", "", "your name")
-	registerCmd.Flags().String("email", "", "your email")
-	registerCmd.Flags().String("password", "", "your password")
+	registerCmd.Flags().StringP("name", "n", "", "your name")
+	registerCmd.Flags().StringP("email", "e", "", "your email")
+	registerCmd.Flags().StringP("password", "p", "", "your password")
 	registerCmd.MarkFlagRequired("name")
 	registerCmd.MarkFlagRequired("email")
 	registerCmd.MarkFlagRequired("password")
