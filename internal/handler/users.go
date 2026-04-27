@@ -1,11 +1,11 @@
 package handler
 
 import (
-	"database/sql"
 	"encoding/json"
 	"net/http"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/mohamed8eo/file-vault/internal/auth"
 	"github.com/mohamed8eo/file-vault/internal/db"
@@ -54,7 +54,7 @@ func (h *Handler) SignUp(w http.ResponseWriter, r *http.Request) {
 
 	// check if user Already exist or not
 	user, err := h.queries.GetUserByEmail(r.Context(), req.Email)
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil && err != pgx.ErrNoRows {
 		http.Error(w, "failed to check user", http.StatusInternalServerError)
 		return
 	}
@@ -227,7 +227,7 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	}
 
 	dbToken, err := h.queries.GetRefreshToken(r.Context(), refreshToken)
-	if err == sql.ErrNoRows {
+	if err == pgx.ErrNoRows {
 		http.Error(w, "invalid refresh token", http.StatusUnauthorized)
 		return
 	}
