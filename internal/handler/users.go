@@ -220,7 +220,8 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	}
 
 	refreshToken := cookie.Value
-	_, err = auth.ValidateJWT(refreshToken, h.refreshTokenSecret)
+
+	_, err = auth.ValidateJWT(h.refreshTokenSecret, refreshToken)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
