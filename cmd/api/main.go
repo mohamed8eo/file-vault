@@ -152,7 +152,8 @@ func main() {
 
 	// wrap entire mux with logging + request ID middleware
 	// wrappedMux := middleware.Logging(middleware.RequestID(mux))
-	wrappedMux := middleware.RequestID(middleware.Logging(mux))
+	logCh := middleware.StartLogWorker(dbQueries)
+	wrappedMux := middleware.RequestID(middleware.Logging(logCh)(mux))
 
 	srv := &http.Server{
 		Addr:    ":" + port,

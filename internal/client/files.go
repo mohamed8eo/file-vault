@@ -36,10 +36,10 @@ func ListFiles() error {
 		return nil
 	}
 
-	fmt.Printf("%-36s  %-30s  %s\n", "ID", "NAME", "SIZE")
-	fmt.Println("--------------------------------------------------------------------------------------------")
+	fmt.Println("                                  id                                  |    name     |         created_at")
+	fmt.Println("----------------------------------------------------------------------+------------+----------------------------")
 	for _, f := range files {
-		fmt.Printf("%-36v  %-30v  %s\n", f["id"], f["file_name"], f["created_at"])
+		fmt.Printf("%38v | %10v | %25v\n", f["id"], f["file_name"], f["created_at"])
 	}
 	return nil
 }

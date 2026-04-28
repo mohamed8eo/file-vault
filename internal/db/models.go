@@ -23,6 +23,17 @@ type RefreshToken struct {
 	CreatedAt pgtype.Timestamp
 }
 
+type RequestLog struct {
+	ID        pgtype.UUID
+	Method    string
+	Path      string
+	Status    int32
+	LatencyMs int64
+	RequestID string
+	UserID    string
+	CreatedAt pgtype.Timestamp
+}
+
 type User struct {
 	ID             pgtype.UUID
 	Email          string
