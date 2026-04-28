@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/mohamed8eo/file-vault/internal/db"
 	"golang.org/x/oauth2"
@@ -124,7 +125,11 @@ func (h *Handler) GithubCallback(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) handleOAuthUser(w http.ResponseWriter, r *http.Request, email, name, providerID, provider, state string) {
 	user, err := h.queries.GetUserByEmail(r.Context(), email)
-	if err != nil {
+	if err != nil && err != pgx.ErrNoRows {
+		http.Error(w, "failed to get user", http.StatusInternalServerError)
+		return
+	}
+	if err == pgx.ErrNoRows {
 		user, err = h.queries.CreateUser(r.Context(), db.CreateUserParams{
 			Email:          email,
 			Name:           name,

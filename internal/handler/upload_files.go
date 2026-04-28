@@ -10,6 +10,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/mohamed8eo/file-vault/internal/db"
 	"github.com/mohamed8eo/file-vault/internal/middleware"
@@ -173,7 +174,11 @@ func (h *UploadHanlder) GetFileByID(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 	if err != nil {
-		http.Error(w, "failed to generate url", http.StatusInternalServerError)
+		if err == pgx.ErrNoRows {
+			http.Error(w, "file not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "failed to fetch file", http.StatusInternalServerError)
 		return
 	}
 

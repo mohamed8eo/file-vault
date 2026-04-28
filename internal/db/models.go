@@ -30,4 +30,6 @@ type User struct {
 	HashedPassword string
 	CreatedAt      pgtype.Timestamp
 	UpdatedAt      pgtype.Timestamp
+	Provider       string
+	ProviderID     string
 }

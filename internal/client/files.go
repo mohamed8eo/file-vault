@@ -81,7 +81,7 @@ func UploadFile(path string) error {
 		return fmt.Errorf("failed to upload file")
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	json.NewDecoder(resp.Body).Decode(&result)
 	fmt.Printf("uploaded successfully — id: %v\n", result["id"])
 	return nil
@@ -98,13 +98,21 @@ func GetFile(id string) error {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusNotFound {
+		return fmt.Errorf("file not found or access denied")
+	}
+
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("file not found")
 	}
 
 	var result map[string]string
 	json.NewDecoder(resp.Body).Decode(&result)
-	url := result["file_url"]
+	url, ok := result["file_url"]
+	if !ok || url == "" {
+		return fmt.Errorf("file URL is missing or empty in the server response")
+	}
+
 	fmt.Println("download url:", url)
 
 	fmt.Println("\nopening in browser...")
@@ -119,7 +127,12 @@ func GetFile(id string) error {
 		cmd = "xdg-open"
 	}
 
-	exec.Command(cmd, url).Start()
+	// Attempt to open the URL
+	err = exec.Command(cmd, url).Start()
+	if err != nil {
+		fmt.Printf("Failed to open browser. Please open the file manually: %s\n", url)
+		return err
+	}
 	return nil
 }
 

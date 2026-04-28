@@ -13,21 +13,29 @@ import (
 
 const createUser = `-- name: CreateUser :one
 INSERT INTO
-    users (email, name, hashed_password)
+    users (email, name, hashed_password, provider, provider_id)
 VALUES
-    ($1, $2, $3)
+    ($1, $2, $3, $4, $5)
 RETURNING
-    id, email, name, hashed_password, created_at, updated_at
+    id, email, name, hashed_password, created_at, updated_at, provider, provider_id
 `
 
 type CreateUserParams struct {
 	Email          string
 	Name           string
 	HashedPassword string
+	Provider       string
+	ProviderID     string
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
-	row := q.db.QueryRow(ctx, createUser, arg.Email, arg.Name, arg.HashedPassword)
+	row := q.db.QueryRow(ctx, createUser,
+		arg.Email,
+		arg.Name,
+		arg.HashedPassword,
+		arg.Provider,
+		arg.ProviderID,
+	)
 	var i User
 	err := row.Scan(
 		&i.ID,
@@ -36,13 +44,15 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.HashedPassword,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Provider,
+		&i.ProviderID,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT
-    id, email, name, hashed_password, created_at, updated_at
+    id, email, name, hashed_password, created_at, updated_at, provider, provider_id
 FROM
     users
 WHERE
@@ -59,13 +69,15 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.HashedPassword,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Provider,
+		&i.ProviderID,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
 SELECT
-    id, email, name, hashed_password, created_at, updated_at
+    id, email, name, hashed_password, created_at, updated_at, provider, provider_id
 FROM
     users
 WHERE
@@ -82,13 +94,15 @@ func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
 		&i.HashedPassword,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Provider,
+		&i.ProviderID,
 	)
 	return i, err
 }
 
 const getUsers = `-- name: GetUsers :many
 SELECT
-    id, email, name, hashed_password, created_at, updated_at
+    id, email, name, hashed_password, created_at, updated_at, provider, provider_id
 FROM
     users
 LIMIT
@@ -111,6 +125,8 @@ func (q *Queries) GetUsers(ctx context.Context) ([]User, error) {
 			&i.HashedPassword,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Provider,
+			&i.ProviderID,
 		); err != nil {
 			return nil, err
 		}

@@ -138,6 +138,12 @@ func main() {
 	mux.Handle("POST /auth/refresh", loginRateLimit(http.HandlerFunc(auth.Refresh)))
 	mux.Handle("POST /auth/logout", loginRateLimit(http.HandlerFunc(auth.Logout)))
 
+	// oAuth route
+	mux.Handle("GET /auth/google", loginRateLimit(http.HandlerFunc(auth.GoogleLogin)))
+	mux.Handle("GET /auth/google/callback", loginRateLimit(http.HandlerFunc(auth.GoogleCallback)))
+	mux.Handle("GET /auth/github", loginRateLimit(http.HandlerFunc(auth.GithubLogin)))
+	mux.Handle("GET /auth/github/callback", loginRateLimit(http.HandlerFunc(auth.GithubCallback)))
+
 	// upload route.
 	mux.Handle("POST /upload", uploadRateLimit(authMiddleware(http.HandlerFunc(uploadHandler.UploadFile))))
 	mux.Handle("GET /files", generalRateLimit(authMiddleware(http.HandlerFunc(uploadHandler.GetFiles))))
