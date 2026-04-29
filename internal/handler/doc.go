@@ -21,18 +21,53 @@
 //     * UploadFile: Upload any file type (max 50MB)
 //     * UploadImage: Upload images only (jpg, png, gif, webp, svg, max 10MB)
 //     * UploadVideo: Upload videos only (mp4, webm, mov, avi, mkv, max 500MB)
-//     * GetFiles: List all user files
+//     * GetFiles: List files with pagination, sort (date/name/size), filter (image/video/document)
+//     * SearchFiles: Search files by name
+//     * GetStorageStats: Get storage statistics (total files, size breakdown by type)
 //     * GetFileByID: Get file details by ID
-//     * DeleteFile: Delete a file
+//     * DeleteFile: Delete a single file
+//     * DeleteFiles: Bulk delete multiple files
+//     * DownloadFile: Get file content for download
 //
 // Upload Endpoints
 //
-//     POST /upload         - Upload any file (50MB limit)
-//     POST /upload/image   - Upload images only (10MB limit, jpg/png/gif/webp/svg)
-//     POST /upload/video   - Upload videos only (500MB limit, mp4/webm/mov/avi/mkv)
+//	POST /upload         - Upload any file (50MB limit)
+//	POST /upload/image   - Upload images only (10MB limit, jpg/png/gif/webp/svg)
+//	POST /upload/video   - Upload videos only (500MB limit, mp4/webm/mov/avi/mkv)
 //
 // Response contains CloudFront URL for direct browser access:
-//     {"id": "uuid", "message": "uploaded successfully", "url": "https://cloudfront.net/..."}
+//	{"id": "uuid", "message": "uploaded successfully", "url": "https://cloudfront.net/...", "file_size": 123456}
+//
+// File List Endpoints
+//
+//	GET /files?limit=20&offset=0&page=1&sort=date&type=image
+//	GET /files/search?q=filename&limit=10
+//	GET /files/stats
+//
+// Query Parameters:
+//   - limit: Number of files to return (default 20, max 100)
+//   - offset: Number of files to skip (default 0)
+//   - page: Page number (calculates offset automatically)
+//   - sort: Sort by "date", "name", or "size" (default "date")
+//   - type: Filter by "image", "video", or "document"
+//
+// Storage Stats Response:
+//	{
+//	  "total_files": 42,
+//	  "total_size": 1572864000,
+//	  "images": {"count": 15, "size": 524288000},
+//	  "videos": {"count": 5, "size": 1048576000},
+//	  "documents": {"count": 22, "size": 104857600}
+//	}
+//
+// Delete Endpoints
+//
+//	DELETE /files/{id}         - Delete single file
+//	POST /files/delete         - Bulk delete (body: {"ids": ["id1", "id2", ...]})
+//
+// Download Endpoints
+//
+//	GET /files/{id}/download - Download file content
 //
 // File Storage
 //

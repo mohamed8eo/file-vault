@@ -135,9 +135,22 @@ file-vault/
 | POST | `/upload` | Yes | Upload any file (max 50MB) |
 | POST | `/upload/image` | Yes | Upload image (max 10MB, jpg/png/gif/webp/svg) |
 | POST | `/upload/video` | Yes | Upload video (max 500MB, mp4/webm/mov/avi/mkv) |
-| GET | `/files` | Yes | List all user files |
+| GET | `/files` | Yes | List files with pagination, sort, and filter |
+| GET | `/files/search` | Yes | Search files by name |
+| GET | `/files/stats` | Yes | Get storage statistics (total files, size by type) |
 | GET | `/files/{id}` | Yes | Get file details with CloudFront URL |
-| DELETE | `/files/{id}` | Yes | Delete file from S3 and DB |
+| POST | `/files/delete` | Yes | Bulk delete files |
+| DELETE | `/files/{id}` | Yes | Delete single file from S3 and DB |
+
+### Query Parameters for `/files`
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `limit` | int | 20 | Number of files to return (max 100) |
+| `offset` | int | 0 | Number of files to skip |
+| `page` | int | 1 | Page number (calculates offset automatically) |
+| `sort` | string | "date" | Sort by: `date`, `name`, `size` |
+| `type` | string | "" | Filter by type: `image`, `video`, `document` |
 
 ### Health Check
 
@@ -159,6 +172,29 @@ The returned URL can be used directly in browsers:
 - **Videos**: Stream directly in `<video>` tag
 - **Images**: Display directly in `<img>` tag
 - **Other files**: Download via browser
+
+## Storage Stats Response
+
+```json
+{
+  "total_files": 42,
+  "total_size": 1572864000,
+  "images": {
+    "count": 15,
+    "size": 524288000
+  },
+  "videos": {
+    "count": 5,
+    "size": 1048576000
+  },
+  "documents": {
+    "count": 22,
+    "size": 104857600
+  }
+}
+```
+
+Size values are in bytes. Use the CLI's `files stats` command for a formatted table view.
 
 ## Environment Variables
 
@@ -201,10 +237,18 @@ file-vault auth register <name> <email> <password>
 file-vault auth logout
 
 # File operations
-file-vault files upload <path>       # Upload file
-file-vault files list                # List all files
-file-vault files get <id>            # Get file URL (opens in browser)
-file-vault files delete <id>         # Delete file
+file-vault files upload <path>              # Upload file
+file-vault files list                       # List files
+file-vault files list --sort date|name|size # Sort files
+file-vault files list --type image|video|document  # Filter by type
+file-vault files list --page <num>          # Paginate (page 1, 2, ...)
+file-vault files list --offset <num>        # Skip offset files
+file-vault files search <query>             # Search files by name
+file-vault files stats                      # Show storage statistics
+file-vault files get <id>                  # Get file URL (opens in browser)
+file-vault files download <id> [output]     # Download file to disk
+file-vault files delete <id>               # Delete single file
+file-vault files delete-many <id1> <id2>... # Bulk delete files
 ```
 
 ## Prerequisites
