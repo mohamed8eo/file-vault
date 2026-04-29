@@ -455,3 +455,56 @@ func (h *UploadHanlder) DeleteFile(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusNoContent)
 }
+
+func (h *UploadHanlder) DeleteFiles(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		IDs []string `json:"ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if len(req.IDs) == 0 {
+		http.Error(w, "no file IDs provided", http.StatusBadRequest)
+		return
+	}
+
+	if len(req.IDs) > 50 {
+		http.Error(w, "max 50 files at once", http.StatusBadRequest)
+		return
+	}
+
+	// Convert string IDs to UUIDs
+	var ids []pgtype.UUID
+	for _, idStr := range req.IDs {
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			http.Error(w, "invalid file ID: "+idStr, http.StatusBadRequest)
+			return
+		}
+		ids = append(ids, pgtype.UUID{Bytes: id, Valid: true})
+	}
+
+	deleted, err := h.dbQueries.DeleteFilesByIDs(r.Context(), db.DeleteFilesByIDsParams{
+		UserID:  pgtype.UUID{Bytes: userID, Valid: true},
+		Column2: ids,
+	})
+	if err != nil {
+		http.Error(w, "failed to delete files", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]any{
+		"deleted": len(deleted),
+		"message": fmt.Sprintf("deleted %d file(s)", len(deleted)),
+	})
+}

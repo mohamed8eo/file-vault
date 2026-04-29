@@ -57,6 +57,16 @@ var deleteCmd = &cobra.Command{
 	},
 }
 
+var deleteManyCmd = &cobra.Command{
+	Use:     "delete-many <id1> <id2> ...",
+	Short:   "Delete multiple files at once",
+	Aliases: []string{"rmall"},
+	Args:    cobra.MinimumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return client.DeleteFiles(args)
+	},
+}
+
 var searchCmd = &cobra.Command{
 	Use:     "search <query>",
 	Short:   "Search files by name",
@@ -94,6 +104,7 @@ func init() {
 	filesCmd.AddCommand(uploadCmd)
 	filesCmd.AddCommand(getCmd)
 	filesCmd.AddCommand(deleteCmd)
+	filesCmd.AddCommand(deleteManyCmd)
 	filesCmd.AddCommand(searchCmd)
 	filesCmd.AddCommand(downloadCmd)
 	rootCmd.AddCommand(filesCmd)

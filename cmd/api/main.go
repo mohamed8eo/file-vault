@@ -160,6 +160,7 @@ func main() {
 	mux.Handle("GET /files/search", generalRateLimit(authMiddleware(http.HandlerFunc(uploadHandler.SearchFiles))))
 	mux.Handle("GET /files/{id}", generalRateLimit(authMiddleware(http.HandlerFunc(uploadHandler.GetFileByID))))
 	mux.Handle("DELETE /files/{id}", generalRateLimit(authMiddleware(http.HandlerFunc(uploadHandler.DeleteFile))))
+	mux.Handle("POST /files/delete", generalRateLimit(authMiddleware(http.HandlerFunc(uploadHandler.DeleteFiles))))
 
 	// wrap entire mux with logging + request ID middleware
 	// wrappedMux := middleware.Logging(middleware.RequestID(mux))

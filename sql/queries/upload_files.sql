@@ -52,6 +52,13 @@ WHERE
     id = $1
     AND user_id = $2;
 
+-- name: DeleteFilesByIDs :many
+DELETE FROM files
+WHERE
+    user_id = $1
+    AND id = ANY($2::uuid[])
+RETURNING id;
+
 -- name: SearchFiles :many
 SELECT
     *

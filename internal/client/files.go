@@ -387,6 +387,31 @@ func DeleteFile(id string) error {
 	return nil
 }
 
+func DeleteFiles(ids []string) error {
+	if LoadToken() == "" {
+		return fmt.Errorf("not logged in, run: file-vault auth login")
+	}
+
+	body, _ := json.Marshal(map[string][]string{"ids": ids})
+
+	resp, err := AuthRequest("POST", "/files/delete", body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to delete files")
+	}
+
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	deleted, _ := result["deleted"].(float64)
+	fmt.Printf("✓ Deleted %d file(s)\n", int(deleted))
+	return nil
+}
+
 func DownloadFile(id, outputPath string) error {
 	if LoadToken() == "" {
 		return fmt.Errorf("not logged in, run: file-vault auth login")

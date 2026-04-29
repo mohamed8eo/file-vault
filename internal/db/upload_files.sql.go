@@ -63,6 +63,39 @@ func (q *Queries) DeleteFileByID(ctx context.Context, arg DeleteFileByIDParams) 
 	return err
 }
 
+const deleteFilesByIDs = `-- name: DeleteFilesByIDs :many
+DELETE FROM files
+WHERE
+    user_id = $1
+    AND id = ANY($2::uuid[])
+RETURNING id
+`
+
+type DeleteFilesByIDsParams struct {
+	UserID  pgtype.UUID
+	Column2 []pgtype.UUID
+}
+
+func (q *Queries) DeleteFilesByIDs(ctx context.Context, arg DeleteFilesByIDsParams) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, deleteFilesByIDs, arg.UserID, arg.Column2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []pgtype.UUID
+	for rows.Next() {
+		var id pgtype.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getFileByID = `-- name: GetFileByID :one
 SELECT
     id, user_id, file_name, file_url, created_at, file_size
