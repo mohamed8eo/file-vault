@@ -465,35 +465,22 @@ func (h *UploadHanlder) GetStorageStats(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	type imageStats struct {
-		Count int64   `json:"count"`
-		Size  int64   `json:"size"`
-	}
-	type videoStats struct {
-		Count int64   `json:"count"`
-		Size  int64   `json:"size"`
-	}
-	type documentStats struct {
-		Count int64   `json:"count"`
-		Size  int64   `json:"size"`
-	}
-
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]any{
 		"total_files": stats.TotalFiles,
 		"total_size":  stats.TotalSize,
-		"images": imageStats{
-			Count: stats.ImageCount,
-			Size:  stats.ImageSize.(int64),
+		"images": map[string]int64{
+			"count": stats.ImageCount,
+			"size":  stats.ImageSize,
 		},
-		"videos": videoStats{
-			Count: stats.VideoCount,
-			Size:  stats.VideoSize.(int64),
+		"videos": map[string]int64{
+			"count": stats.VideoCount,
+			"size":  stats.VideoSize,
 		},
-		"documents": documentStats{
-			Count: stats.DocumentCount,
-			Size:  stats.DocumentSize.(int64),
+		"documents": map[string]int64{
+			"count": stats.DocumentCount,
+			"size":  stats.DocumentSize,
 		},
 	})
 }

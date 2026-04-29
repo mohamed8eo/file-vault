@@ -22,10 +22,10 @@ func loadingSpinner(done chan bool) {
 	for {
 		select {
 		case <-done:
-			fmt.Print("\r")
+			fmt.Print("\033[2K\r") // Clear entire line properly
 			return
 		default:
-			fmt.Printf("\r%s Loading...", loadingChars[i%len(loadingChars)])
+			fmt.Printf("\r%s ", loadingChars[i%len(loadingChars)])
 			time.Sleep(50 * time.Millisecond)
 			i++
 		}
@@ -226,7 +226,7 @@ func UploadFile(path string) error {
 		return fmt.Errorf("failed to upload file")
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	json.NewDecoder(resp.Body).Decode(&result)
 
 	id, ok := result["id"].(string)
@@ -305,7 +305,7 @@ func SearchFiles(query string, limit int) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusUnauthorized {
-		if err := refreshAccessToken(); err != nil {
+		if err = refreshAccessToken(); err != nil {
 			return err
 		}
 		req.Header.Set("Authorization", "Bearer "+LoadToken())
@@ -404,7 +404,7 @@ func DeleteFiles(ids []string) error {
 		return fmt.Errorf("failed to delete files")
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	json.NewDecoder(resp.Body).Decode(&result)
 
 	deleted, _ := result["deleted"].(float64)
@@ -412,12 +412,44 @@ func DeleteFiles(ids []string) error {
 	return nil
 }
 
+var (
+	green  = "\033[32m"
+	yellow = "\033[33m"
+	red    = "\033[31m"
+	cyan   = "\033[36m"
+	reset  = "\033[0m"
+	bold   = "\033[1m"
+)
+
+func getSizeColor(bytes int64) string {
+	if bytes == 0 {
+		return green
+	}
+	if bytes < 10*1024*1024 { // < 10MB
+		return green
+	}
+	if bytes < 100*1024*1024 { // < 100MB
+		return yellow
+	}
+	return red
+}
+
+func colorizeSize(bytes int64) string {
+	color := getSizeColor(bytes)
+	return fmt.Sprintf("%s%s%s", color, formatFileSize(bytes), reset)
+}
+
 func GetStorageStats() error {
 	if LoadToken() == "" {
 		return fmt.Errorf("not logged in, run: file-vault auth login")
 	}
 
+	done := make(chan bool, 1)
+	go loadingSpinner(done)
+
 	resp, err := AuthRequest("GET", "/files/stats", nil)
+	done <- true // Stop spinner here before displaying the table
+	fmt.Print("\r\033[2K") // Clear spinner line and move cursor to start
 	if err != nil {
 		return err
 	}
@@ -427,7 +459,7 @@ func GetStorageStats() error {
 		return fmt.Errorf("failed to get stats")
 	}
 
-	var stats map[string]interface{}
+	var stats map[string]any
 	json.NewDecoder(resp.Body).Decode(&stats)
 
 	totalFiles, _ := stats["total_files"].(float64)
@@ -437,16 +469,30 @@ func GetStorageStats() error {
 	videos, _ := stats["videos"].(map[string]interface{})
 	docs, _ := stats["documents"].(map[string]interface{})
 
-	fmt.Println("┌─────────────────────────────────────┐")
-	fmt.Println("│         Storage Statistics          │")
-	fmt.Println("├─────────────────────────────────────┤")
-	fmt.Printf("│ Total Files:  %-20d│\n", int(totalFiles))
-	fmt.Printf("│ Total Size:   %-20s│\n", formatFileSize(int64(totalSize)))
-	fmt.Println("├─────────────────────────────────────┤")
-	fmt.Printf("│ Images:       %-10d %-7s│\n", int(images["count"].(float64)), formatFileSize(int64(images["size"].(float64))))
-	fmt.Printf("│ Videos:       %-10d %-7s│\n", int(videos["count"].(float64)), formatFileSize(int64(videos["size"].(float64))))
-	fmt.Printf("│ Documents:    %-10d %-7s│\n", int(docs["count"].(float64)), formatFileSize(int64(docs["size"].(float64))))
-	fmt.Println("└─────────────────────────────────────┘")
+	imageSize := int64(images["size"].(float64))
+	videoSize := int64(videos["size"].(float64))
+	docSize := int64(docs["size"].(float64))
+
+	labelCol := 12
+	countCol := 8
+	sizeCol := 12
+
+	border := "  " + cyan + "┌" + strings.Repeat("─", labelCol+countCol+sizeCol+8) + "┐" + reset
+	divider := "  " + cyan + "├" + strings.Repeat("─", labelCol+countCol+sizeCol+8) + "┤" + reset
+	footer := "  " + cyan + "└" + strings.Repeat("─", labelCol+countCol+sizeCol+8) + "┘" + reset
+
+	fmt.Println(border)
+	fmt.Printf("  %s│%s%*s %-14s %*s│%s\n", cyan, bold, (labelCol/2)+4, "", "📊 Storage Statistics", (labelCol/2)+countCol+sizeCol-4, "", bold, reset)
+	fmt.Println(divider)
+	fmt.Printf("  %s│ %-*s │ %*s │ %*s │%s\n", cyan, labelCol, "Type", countCol, "Count", sizeCol, "Size", reset)
+	fmt.Println(divider)
+	fmt.Printf("  %s│ %-*s │ %*d │ %*s │%s\n", cyan, labelCol, "Images", countCol, int(images["count"].(float64)), sizeCol, colorizeSize(imageSize), reset)
+	fmt.Printf("  %s│ %-*s │ %*d │ %*s │%s\n", cyan, labelCol, "Videos", countCol, int(videos["count"].(float64)), sizeCol, colorizeSize(videoSize), reset)
+	fmt.Printf("  %s│ %-*s │ %*d │ %*s │%s\n", cyan, labelCol, "Documents", countCol, int(docs["count"].(float64)), sizeCol, colorizeSize(docSize), reset)
+	fmt.Println(divider)
+	fmt.Printf("  %s│ %-*s │ %*d │ %*s │%s\n", cyan, labelCol, "TOTAL", countCol, int(totalFiles), sizeCol, colorizeSize(int64(totalSize)), reset)
+	fmt.Println(footer)
+	fmt.Println()
 
 	return nil
 }
@@ -515,3 +561,4 @@ func DownloadFile(id, outputPath string) error {
 	fmt.Printf("✓ Saved: %s\n", outPath)
 	return nil
 }
+

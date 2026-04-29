@@ -38,15 +38,15 @@ ORDER BY
 LIMIT $3 OFFSET $6;
 
 -- name: GetStorageStats :one
-SELECT 
+SELECT
     COUNT(*) as total_files,
-    COALESCE(SUM(file_size), 0) as total_size,
+    COALESCE(SUM(file_size), 0)::bigint as total_size,
     COUNT(*) FILTER (WHERE file_url ILIKE '%.jpg' OR file_url ILIKE '%.jpeg' OR file_url ILIKE '%.png' OR file_url ILIKE '%.gif' OR file_url ILIKE '%.webp' OR file_url ILIKE '%.svg') as image_count,
-    COALESCE(SUM(file_size) FILTER (WHERE file_url ILIKE '%.jpg' OR file_url ILIKE '%.jpeg' OR file_url ILIKE '%.png' OR file_url ILIKE '%.gif' OR file_url ILIKE '%.webp' OR file_url ILIKE '%.svg'), 0) as image_size,
+    COALESCE(SUM(file_size) FILTER (WHERE file_url ILIKE '%.jpg' OR file_url ILIKE '%.jpeg' OR file_url ILIKE '%.png' OR file_url ILIKE '%.gif' OR file_url ILIKE '%.webp' OR file_url ILIKE '%.svg'), 0)::bigint as image_size,
     COUNT(*) FILTER (WHERE file_url ILIKE '%.mp4' OR file_url ILIKE '%.webm' OR file_url ILIKE '%.mov' OR file_url ILIKE '%.avi' OR file_url ILIKE '%.mkv') as video_count,
-    COALESCE(SUM(file_size) FILTER (WHERE file_url ILIKE '%.mp4' OR file_url ILIKE '%.webm' OR file_url ILIKE '%.mov' OR file_url ILIKE '%.avi' OR file_url ILIKE '%.mkv'), 0) as video_size,
+    COALESCE(SUM(file_size) FILTER (WHERE file_url ILIKE '%.mp4' OR file_url ILIKE '%.webm' OR file_url ILIKE '%.mov' OR file_url ILIKE '%.avi' OR file_url ILIKE '%.mkv'), 0)::bigint as video_size,
     COUNT(*) FILTER (WHERE file_url ILIKE '%.pdf' OR file_url ILIKE '%.doc' OR file_url ILIKE '%.txt' OR file_url ILIKE '%.PDF') as document_count,
-    COALESCE(SUM(file_size) FILTER (WHERE file_url ILIKE '%.pdf' OR file_url ILIKE '%.doc' OR file_url ILIKE '%.txt' OR file_url ILIKE '%.PDF'), 0) as document_size
+    COALESCE(SUM(file_size) FILTER (WHERE file_url ILIKE '%.pdf' OR file_url ILIKE '%.doc' OR file_url ILIKE '%.txt' OR file_url ILIKE '%.PDF'), 0)::bigint as document_size
 FROM files
 WHERE user_id = $1;
 
