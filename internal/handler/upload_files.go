@@ -17,23 +17,26 @@ import (
 )
 
 type UploadHanlder struct {
-	dbQueries *db.Queries
-	s3Bucket  string
-	s3Region  string
-	s3Client  *s3.Client
+	dbQueries    *db.Queries
+	s3Bucket     string
+	s3Region     string
+	s3Client     *s3.Client
+	s3CloudFront string
 }
 
 func NewUploadHandler(
 	dbQueries *db.Queries,
 	s3Bucket string,
 	s3Region string,
+	s3CloudFront string,
 	s3Client *s3.Client,
 ) *UploadHanlder {
 	return &UploadHanlder{
-		dbQueries: dbQueries,
-		s3Bucket:  s3Bucket,
-		s3Region:  s3Region,
-		s3Client:  s3Client,
+		dbQueries:    dbQueries,
+		s3Bucket:     s3Bucket,
+		s3Region:     s3Region,
+		s3Client:     s3Client,
+		s3CloudFront: s3CloudFront,
 	}
 }
 

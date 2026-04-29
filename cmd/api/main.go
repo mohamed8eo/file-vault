@@ -27,6 +27,7 @@ type apiConfig struct {
 	s3Bucket           string
 	s3Region           string
 	s3Client           *s3.Client
+	s3CloudFront       string
 }
 
 func main() {
@@ -83,6 +84,11 @@ func main() {
 		log.Fatalf("error: %s\n", err.Error())
 	}
 
+	s3CloudFront := os.Getenv("CLOUDFRONT_DOMAIN")
+	if s3CloudFront == "" {
+		log.Fatal("S3_REGION environment variable is not set")
+	}
+
 	client := s3.NewFromConfig(awsCfg)
 
 	cfg := &apiConfig{
@@ -93,6 +99,7 @@ func main() {
 		s3Region:           s3Region,
 		s3Bucket:           s3Bucket,
 		s3Client:           client,
+		s3CloudFront:       s3CloudFront,
 	}
 
 	port := os.Getenv("PORT")
@@ -111,6 +118,7 @@ func main() {
 		cfg.dbQueries,
 		cfg.s3Bucket,
 		cfg.s3Region,
+		cfg.s3CloudFront,
 		cfg.s3Client,
 	)
 
