@@ -13,21 +13,27 @@ import (
 
 const createFile = `-- name: CreateFile :one
 INSERT INTO
-    files (user_id, file_name, file_url)
+    files (user_id, file_name, file_url, file_size)
 VALUES
-    ($1, $2, $3)
+    ($1, $2, $3, $4)
 RETURNING
-    id, user_id, file_name, file_url, created_at
+    id, user_id, file_name, file_url, created_at, file_size
 `
 
 type CreateFileParams struct {
 	UserID   pgtype.UUID
 	FileName string
 	FileUrl  string
+	FileSize int64
 }
 
 func (q *Queries) CreateFile(ctx context.Context, arg CreateFileParams) (File, error) {
-	row := q.db.QueryRow(ctx, createFile, arg.UserID, arg.FileName, arg.FileUrl)
+	row := q.db.QueryRow(ctx, createFile,
+		arg.UserID,
+		arg.FileName,
+		arg.FileUrl,
+		arg.FileSize,
+	)
 	var i File
 	err := row.Scan(
 		&i.ID,
@@ -35,6 +41,7 @@ func (q *Queries) CreateFile(ctx context.Context, arg CreateFileParams) (File, e
 		&i.FileName,
 		&i.FileUrl,
 		&i.CreatedAt,
+		&i.FileSize,
 	)
 	return i, err
 }
@@ -58,7 +65,7 @@ func (q *Queries) DeleteFileByID(ctx context.Context, arg DeleteFileByIDParams) 
 
 const getFileByID = `-- name: GetFileByID :one
 SELECT
-    id, user_id, file_name, file_url, created_at
+    id, user_id, file_name, file_url, created_at, file_size
 FROM
     files
 WHERE
@@ -80,23 +87,34 @@ func (q *Queries) GetFileByID(ctx context.Context, arg GetFileByIDParams) (File,
 		&i.FileName,
 		&i.FileUrl,
 		&i.CreatedAt,
+		&i.FileSize,
 	)
 	return i, err
 }
 
 const getFilesByUser = `-- name: GetFilesByUser :many
 SELECT
-    id, user_id, file_name, file_url, created_at
+    id, user_id, file_name, file_url, created_at, file_size
 FROM
     files
 WHERE
     user_id = $1
 ORDER BY
     created_at DESC
+LIMIT
+    $2
+OFFSET
+    $3
 `
 
-func (q *Queries) GetFilesByUser(ctx context.Context, userID pgtype.UUID) ([]File, error) {
-	rows, err := q.db.Query(ctx, getFilesByUser, userID)
+type GetFilesByUserParams struct {
+	UserID pgtype.UUID
+	Limit  int32
+	Offset int32
+}
+
+func (q *Queries) GetFilesByUser(ctx context.Context, arg GetFilesByUserParams) ([]File, error) {
+	rows, err := q.db.Query(ctx, getFilesByUser, arg.UserID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -110,6 +128,7 @@ func (q *Queries) GetFilesByUser(ctx context.Context, userID pgtype.UUID) ([]Fil
 			&i.FileName,
 			&i.FileUrl,
 			&i.CreatedAt,
+			&i.FileSize,
 		); err != nil {
 			return nil, err
 		}

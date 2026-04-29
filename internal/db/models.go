@@ -14,6 +14,7 @@ type File struct {
 	FileName  string
 	FileUrl   string
 	CreatedAt pgtype.Timestamptz
+	FileSize  int64
 }
 
 type RefreshToken struct {

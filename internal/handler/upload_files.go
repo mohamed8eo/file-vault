@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -136,6 +137,7 @@ func (h *UploadHanlder) uploadSingle(w http.ResponseWriter, r *http.Request, cfg
 	}
 
 	key := fmt.Sprintf("%s/%d-%s", cfg.prefix, time.Now().Unix(), sanitizeFilename(header.Filename))
+	fileSize := header.Size
 
 	input := &s3.PutObjectInput{
 		Bucket:      &h.s3Bucket,
@@ -155,6 +157,7 @@ func (h *UploadHanlder) uploadSingle(w http.ResponseWriter, r *http.Request, cfg
 		UserID:   pgtype.UUID{Bytes: userID, Valid: true},
 		FileName: header.Filename,
 		FileUrl:  fileURL,
+		FileSize: fileSize,
 	})
 	if err != nil {
 		return &httpError{code: http.StatusInternalServerError, msg: "failed to save record"}
@@ -162,7 +165,7 @@ func (h *UploadHanlder) uploadSingle(w http.ResponseWriter, r *http.Request, cfg
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	json.NewEncoder(w).Encode(map[string]any{
 		"id":      createdFile.ID.String(),
 		"message": "uploaded successfully",
 		"url":     fileURL,
@@ -237,9 +240,31 @@ func sanitizeFilename(name string) string {
 func (h *UploadHanlder) GetFiles(w http.ResponseWriter, r *http.Request) {
 	userID := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
 
-	files, err := h.dbQueries.GetFilesByUser(r.Context(), pgtype.UUID{
-		Bytes: userID,
-		Valid: true,
+	limit := 20
+	offset := 0
+
+	if l := r.URL.Query().Get("limit"); l != "" {
+		v, err := strconv.Atoi(l)
+		if err != nil || v <= 0 || v > 100 {
+			http.Error(w, "invalid limit", http.StatusBadRequest)
+			return
+		}
+		limit = v
+	}
+
+	if o := r.URL.Query().Get("offset"); o != "" {
+		v, err := strconv.Atoi(o)
+		if err != nil || v < 0 {
+			http.Error(w, "invalid offset", http.StatusBadRequest)
+			return
+		}
+		offset = v
+	}
+
+	files, err := h.dbQueries.GetFilesByUser(r.Context(), db.GetFilesByUserParams{
+		UserID: pgtype.UUID{Bytes: userID, Valid: true},
+		Limit:  int32(limit),
+		Offset: int32(offset),
 	})
 	if err != nil {
 		http.Error(w, "failed to fetch files", http.StatusInternalServerError)
@@ -250,6 +275,7 @@ func (h *UploadHanlder) GetFiles(w http.ResponseWriter, r *http.Request) {
 		ID        string `json:"id"`
 		FileName  string `json:"file_name"`
 		FileURL   string `json:"file_url"`
+		FileSize  int64  `json:"file_size"`
 		CreatedAt string `json:"created_at"`
 	}
 
@@ -260,6 +286,7 @@ func (h *UploadHanlder) GetFiles(w http.ResponseWriter, r *http.Request) {
 			ID:        f.ID.String(),
 			FileName:  f.FileName,
 			FileURL:   f.FileUrl,
+			FileSize:  f.FileSize,
 			CreatedAt: f.CreatedAt.Time.Format(time.RFC3339),
 		})
 	}
@@ -302,10 +329,11 @@ func (h *UploadHanlder) GetFileByID(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{
+	json.NewEncoder(w).Encode(map[string]any{
 		"message":   "Get file URL Successfully",
 		"file_url":  file.FileUrl,
 		"file_name": file.FileName,
+		"file_size": file.FileSize,
 	})
 }
 

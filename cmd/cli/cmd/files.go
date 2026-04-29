@@ -5,6 +5,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	limit  int
+	page   int
+	offset int
+)
+
 var filesCmd = &cobra.Command{
 	Use:   "files",
 	Short: "File management commands",
@@ -15,7 +21,7 @@ var listCmd = &cobra.Command{
 	Short:   "List all your files",
 	Aliases: []string{"ls"},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return client.ListFiles()
+		return client.ListFiles(limit, page, offset)
 	},
 }
 
@@ -50,6 +56,10 @@ var deleteCmd = &cobra.Command{
 }
 
 func init() {
+	listCmd.Flags().IntVarP(&limit, "limit", "l", 20, "Number of files to list")
+	listCmd.Flags().IntVarP(&page, "page", "p", 1, "Page number (1-based)")
+	listCmd.Flags().IntVarP(&offset, "offset", "o", 0, "Offset (alternative to page)")
+
 	filesCmd.AddCommand(listCmd)
 	filesCmd.AddCommand(uploadCmd)
 	filesCmd.AddCommand(getCmd)
