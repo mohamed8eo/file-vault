@@ -22,7 +22,7 @@ func loadingSpinner(done chan bool) {
 	for {
 		select {
 		case <-done:
-			fmt.Print("\033[2K\r") // Clear entire line properly
+			fmt.Print("\r\033[K") // Clear from cursor to end of line
 			return
 		default:
 			fmt.Printf("\r%s ", loadingChars[i%len(loadingChars)])
@@ -448,8 +448,9 @@ func GetStorageStats() error {
 	go loadingSpinner(done)
 
 	resp, err := AuthRequest("GET", "/files/stats", nil)
-	done <- true // Stop spinner here before displaying the table
-	fmt.Print("\r\033[2K") // Clear spinner line and move cursor to start
+	done <- true
+	time.Sleep(10 * time.Millisecond)
+	fmt.Print("\r") // Return to start of line to overwrite spinner
 	if err != nil {
 		return err
 	}
@@ -476,21 +477,24 @@ func GetStorageStats() error {
 	labelCol := 12
 	countCol := 8
 	sizeCol := 12
+	totalWidth := labelCol + countCol + sizeCol + 8
 
-	border := "  " + cyan + "┌" + strings.Repeat("─", labelCol+countCol+sizeCol+8) + "┐" + reset
-	divider := "  " + cyan + "├" + strings.Repeat("─", labelCol+countCol+sizeCol+8) + "┤" + reset
-	footer := "  " + cyan + "└" + strings.Repeat("─", labelCol+countCol+sizeCol+8) + "┘" + reset
+	border := cyan + "┌" + strings.Repeat("─", totalWidth) + "┐" + reset
+	divider := cyan + "├" + strings.Repeat("─", totalWidth) + "┤" + reset
+	footer := cyan + "└" + strings.Repeat("─", totalWidth) + "┘" + reset
+	title := bold + "📊 Storage Statistics" + reset
+	padding := strings.Repeat(" ", (totalWidth-len(title))/2)
 
 	fmt.Println(border)
-	fmt.Printf("  %s│%s%*s %-14s %*s│%s\n", cyan, bold, (labelCol/2)+4, "", "📊 Storage Statistics", (labelCol/2)+countCol+sizeCol-4, "", bold, reset)
+	fmt.Printf("%s│%s%s%s│%s\n", cyan, padding, title, padding, reset)
 	fmt.Println(divider)
-	fmt.Printf("  %s│ %-*s │ %*s │ %*s │%s\n", cyan, labelCol, "Type", countCol, "Count", sizeCol, "Size", reset)
+	fmt.Printf("%s│ %-*s │ %*s │ %*s │%s\n", cyan, labelCol, "Type", countCol, "Count", sizeCol, "Size", reset)
 	fmt.Println(divider)
-	fmt.Printf("  %s│ %-*s │ %*d │ %*s │%s\n", cyan, labelCol, "Images", countCol, int(images["count"].(float64)), sizeCol, colorizeSize(imageSize), reset)
-	fmt.Printf("  %s│ %-*s │ %*d │ %*s │%s\n", cyan, labelCol, "Videos", countCol, int(videos["count"].(float64)), sizeCol, colorizeSize(videoSize), reset)
-	fmt.Printf("  %s│ %-*s │ %*d │ %*s │%s\n", cyan, labelCol, "Documents", countCol, int(docs["count"].(float64)), sizeCol, colorizeSize(docSize), reset)
+	fmt.Printf("%s│ %-*s │ %*d │ %*s │%s\n", cyan, labelCol, "Images", countCol, int(images["count"].(float64)), sizeCol, colorizeSize(imageSize), reset)
+	fmt.Printf("%s│ %-*s │ %*d │ %*s │%s\n", cyan, labelCol, "Videos", countCol, int(videos["count"].(float64)), sizeCol, colorizeSize(videoSize), reset)
+	fmt.Printf("%s│ %-*s │ %*d │ %*s │%s\n", cyan, labelCol, "Documents", countCol, int(docs["count"].(float64)), sizeCol, colorizeSize(docSize), reset)
 	fmt.Println(divider)
-	fmt.Printf("  %s│ %-*s │ %*d │ %*s │%s\n", cyan, labelCol, "TOTAL", countCol, int(totalFiles), sizeCol, colorizeSize(int64(totalSize)), reset)
+	fmt.Printf("%s│ %-*s │ %*d │ %*s │%s\n", cyan, labelCol, "TOTAL", countCol, int(totalFiles), sizeCol, colorizeSize(int64(totalSize)), reset)
 	fmt.Println(footer)
 	fmt.Println()
 
