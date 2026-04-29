@@ -64,26 +64,46 @@ func UploadFile(path string) error {
 	io.Copy(part, file)
 	writer.Close()
 
-	req, err := http.NewRequest("POST", baseURL+"/upload", &buf)
-	if err != nil {
-		return err
+	makeReq := func() (*http.Response, error) {
+		req, err := http.NewRequest("POST", baseURL+"/upload", &buf)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Authorization", "Bearer "+LoadToken())
+		req.Header.Set("Content-Type", writer.FormDataContentType())
+		return http.DefaultClient.Do(req)
 	}
-	req.Header.Set("Authorization", "Bearer "+LoadToken())
-	req.Header.Set("Content-Type", writer.FormDataContentType())
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := makeReq()
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusUnauthorized {
+		if err := refreshAccessToken(); err != nil {
+			return err
+		}
+		resp, err = makeReq()
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+	}
+
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("failed to upload file")
 	}
 
-	var result map[string]any
+	var result map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&result)
-	fmt.Printf("uploaded successfully — id: %v\n", result["id"])
+
+	id, ok := result["id"].(string)
+	if !ok {
+		fmt.Println("uploaded successfully")
+		return nil
+	}
+	fmt.Printf("uploaded successfully — id: %s\n", id)
 	return nil
 }
 

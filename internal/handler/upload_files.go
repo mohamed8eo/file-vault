@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"mime"
+	"io"
 	"net/http"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -14,6 +16,14 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/mohamed8eo/file-vault/internal/db"
 	"github.com/mohamed8eo/file-vault/internal/middleware"
+)
+
+type FileType string
+
+const (
+	FileTypeImage FileType = "image"
+	FileTypeVideo FileType = "video"
+	FileTypeOther FileType = "other"
 )
 
 type UploadHanlder struct {
@@ -40,66 +50,188 @@ func NewUploadHandler(
 	}
 }
 
-func (h *UploadHanlder) UploadFile(w http.ResponseWriter, r *http.Request) {
-	userID, ok := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
-	if !ok {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+type uploadConfig struct {
+	maxSize     int64
+	allowedExt  []string
+	allowedMime []string
+	prefix      string
+}
+
+var (
+	imageConfig = uploadConfig{
+		maxSize:     10 << 20,
+		allowedExt:  []string{".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"},
+		allowedMime: []string{"image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml"},
+		prefix:      "images",
+	}
+	videoConfig = uploadConfig{
+		maxSize:     500 << 20,
+		allowedExt:  []string{".mp4", ".webm", ".mov", ".avi", ".mkv"},
+		allowedMime: []string{"video/mp4", "video/webm", "video/quicktime", "video/x-msvideo", "video/x-matroska"},
+		prefix:      "videos",
+	}
+	fileConfig = uploadConfig{
+		maxSize:     50 << 20,
+		allowedExt:  []string{},
+		allowedMime: []string{},
+		prefix:      "files",
+	}
+)
+
+func (h *UploadHanlder) UploadImage(w http.ResponseWriter, r *http.Request) {
+	if err := h.uploadSingle(w, r, imageConfig, FileTypeImage); err != nil {
+		http.Error(w, err.Error(), err.(*httpError).code)
 		return
 	}
+}
 
-	maxReader := 10 << 20
-	r.Body = http.MaxBytesReader(w, r.Body, int64(maxReader))
-
-	if err := r.ParseMultipartForm(int64(maxReader)); err != nil {
-		http.Error(w, err.Error(), http.StatusRequestEntityTooLarge)
+func (h *UploadHanlder) UploadVideo(w http.ResponseWriter, r *http.Request) {
+	if err := h.uploadSingle(w, r, videoConfig, FileTypeVideo); err != nil {
+		http.Error(w, err.Error(), err.(*httpError).code)
 		return
+	}
+}
+
+func (h *UploadHanlder) UploadFile(w http.ResponseWriter, r *http.Request) {
+	if err := h.uploadSingle(w, r, fileConfig, FileTypeOther); err != nil {
+		http.Error(w, err.Error(), err.(*httpError).code)
+		return
+	}
+}
+
+type httpError struct {
+	code int
+	msg  string
+}
+
+func (e *httpError) Error() string {
+	return e.msg
+}
+
+func (h *UploadHanlder) uploadSingle(w http.ResponseWriter, r *http.Request, cfg uploadConfig, fileType FileType) error {
+	userID, ok := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
+	if !ok {
+		return &httpError{code: http.StatusUnauthorized, msg: "unauthorized"}
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, cfg.maxSize)
+
+	if err := r.ParseMultipartForm(cfg.maxSize); err != nil {
+		return &httpError{code: http.StatusRequestEntityTooLarge, msg: "file too large"}
 	}
 
 	file, header, err := r.FormFile("file")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+		return &httpError{code: http.StatusBadRequest, msg: "invalid file"}
 	}
 	defer file.Close()
 
-	mediaType, _, err := mime.ParseMediaType(header.Header.Get("Content-Type"))
+	contentType, err := detectContentType(file, header.Filename)
 	if err != nil {
-		http.Error(w, "Invalide Content Type", http.StatusBadRequest)
-		return
+		return &httpError{code: http.StatusInternalServerError, msg: "failed to detect content type"}
 	}
 
-	key := fmt.Sprintf("uploads/%d-%s", time.Now().Unix(), header.Filename)
+	if !isAllowedType(contentType, header.Filename, cfg) {
+		return &httpError{code: http.StatusNotAcceptable, msg: "file type not allowed"}
+	}
+
+	key := fmt.Sprintf("%s/%d-%s", cfg.prefix, time.Now().Unix(), sanitizeFilename(header.Filename))
 
 	input := &s3.PutObjectInput{
 		Bucket:      &h.s3Bucket,
 		Key:         &key,
 		Body:        file,
-		ContentType: &mediaType,
+		ContentType: &contentType,
 	}
 
 	_, err = h.s3Client.PutObject(context.TODO(), input)
 	if err != nil {
-		http.Error(w, "S3 upload failed", http.StatusInternalServerError)
-		return
+		return &httpError{code: http.StatusInternalServerError, msg: "upload failed"}
 	}
 
-	// Store in db
-	_, err = h.dbQueries.CreateFile(r.Context(), db.CreateFileParams{
-		UserID: pgtype.UUID{
-			Bytes: userID,
-			Valid: true,
-		},
+	fileURL := fmt.Sprintf("https://%s/%s", h.s3CloudFront, key)
+
+	createdFile, err := h.dbQueries.CreateFile(r.Context(), db.CreateFileParams{
+		UserID:   pgtype.UUID{Bytes: userID, Valid: true},
 		FileName: header.Filename,
-		FileUrl:  key,
+		FileUrl:  fileURL,
 	})
 	if err != nil {
-		http.Error(w, "failed to save file record", http.StatusInternalServerError)
-		return
+		return &httpError{code: http.StatusInternalServerError, msg: "failed to save record"}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("File upload successfully!"))
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"id":      createdFile.ID.String(),
+		"message": "uploaded successfully",
+		"url":     fileURL,
+	})
+	return nil
+}
+
+func detectContentType(file io.ReadSeeker, filename string) (string, error) {
+	buffer := make([]byte, 512)
+	n, err := file.Read(buffer)
+	if err != nil && err.Error() != "EOF" {
+		return "", err
+	}
+	file.Seek(0, 0)
+
+	mediaType := http.DetectContentType(buffer[:n])
+	if mediaType == "application/octet-stream" {
+		ext := strings.ToLower(filepath.Ext(filename))
+		switch ext {
+		case ".jpg", ".jpeg":
+			mediaType = "image/jpeg"
+		case ".png":
+			mediaType = "image/png"
+		case ".gif":
+			mediaType = "image/gif"
+		case ".webp":
+			mediaType = "image/webp"
+		case ".svg":
+			mediaType = "image/svg+xml"
+		case ".mp4":
+			mediaType = "video/mp4"
+		case ".webm":
+			mediaType = "video/webm"
+		case ".mov":
+			mediaType = "video/quicktime"
+		case ".avi":
+			mediaType = "video/x-msvideo"
+		case ".mkv":
+			mediaType = "video/x-matroska"
+		}
+	}
+	return mediaType, nil
+}
+
+func isAllowedType(contentType, filename string, cfg uploadConfig) bool {
+	if len(cfg.allowedMime) == 0 {
+		return true
+	}
+	ext := strings.ToLower(filepath.Ext(filename))
+	for _, allowed := range cfg.allowedExt {
+		if ext == allowed {
+			return true
+		}
+	}
+	for _, allowed := range cfg.allowedMime {
+		if contentType == allowed {
+			return true
+		}
+	}
+	return false
+}
+
+func sanitizeFilename(name string) string {
+	ext := filepath.Ext(name)
+	name = strings.TrimSuffix(name, ext)
+	name = strings.ReplaceAll(name, " ", "-")
+	name = strings.ReplaceAll(name, "_", "-")
+	name = strings.ToLower(name)
+	return name + ext
 }
 
 func (h *UploadHanlder) GetFiles(w http.ResponseWriter, r *http.Request) {
@@ -114,8 +246,6 @@ func (h *UploadHanlder) GetFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	presignClient := s3.NewPresignClient(h.s3Client)
-
 	type fileResponse struct {
 		ID        string `json:"id"`
 		FileName  string `json:"file_name"`
@@ -126,19 +256,10 @@ func (h *UploadHanlder) GetFiles(w http.ResponseWriter, r *http.Request) {
 	result := []fileResponse{}
 
 	for _, f := range files {
-		presigned, err := presignClient.PresignGetObject(context.TODO(), &s3.GetObjectInput{
-			Bucket: &h.s3Bucket,
-			Key:    &f.FileUrl,
-		}, s3.WithPresignExpires(10*time.Minute))
-		if err != nil {
-			http.Error(w, "failed to generate url", http.StatusInternalServerError)
-			return
-		}
-
 		result = append(result, fileResponse{
 			ID:        f.ID.String(),
 			FileName:  f.FileName,
-			FileURL:   presigned.URL,
+			FileURL:   f.FileUrl,
 			CreatedAt: f.CreatedAt.Time.Format(time.RFC3339),
 		})
 	}
@@ -167,14 +288,8 @@ func (h *UploadHanlder) GetFileByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	file, err := h.dbQueries.GetFileByID(r.Context(), db.GetFileByIDParams{
-		ID: pgtype.UUID{
-			Bytes: fileIDUUID,
-			Valid: true,
-		},
-		UserID: pgtype.UUID{
-			Bytes: userID,
-			Valid: true,
-		},
+		ID:     pgtype.UUID{Bytes: fileIDUUID, Valid: true},
+		UserID: pgtype.UUID{Bytes: userID, Valid: true},
 	})
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -185,33 +300,13 @@ func (h *UploadHanlder) GetFileByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	presignClient := s3.NewPresignClient(h.s3Client)
-
-	presign, err := presignClient.PresignGetObject(context.TODO(), &s3.GetObjectInput{
-		Bucket: &h.s3Bucket,
-		Key:    &file.FileUrl,
-	}, s3.WithPresignExpires(10*time.Minute))
-	if err != nil {
-		http.Error(w, "failed to generate url", http.StatusInternalServerError)
-		return
-	}
-
-	type response struct {
-		Message  string `json:"message"`
-		FileURL  string `json:"file_url"`
-		FileName string `json:"file_name"`
-	}
-
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(&response{
-		Message:  "Get file URL Successfully",
-		FileURL:  presign.URL,
-		FileName: file.FileName,
-	}); err != nil {
-		http.Error(w, "failed to encode the res json", http.StatusInternalServerError)
-		return
-	}
+	json.NewEncoder(w).Encode(map[string]string{
+		"message":   "Get file URL Successfully",
+		"file_url":  file.FileUrl,
+		"file_name": file.FileName,
+	})
 }
 
 func (h *UploadHanlder) DeleteFile(w http.ResponseWriter, r *http.Request) {
@@ -233,23 +328,15 @@ func (h *UploadHanlder) DeleteFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// get File data from db
 	file, err := h.dbQueries.GetFileByID(r.Context(), db.GetFileByIDParams{
-		UserID: pgtype.UUID{
-			Bytes: userID,
-			Valid: true,
-		},
-		ID: pgtype.UUID{
-			Bytes: fileIDUUID,
-			Valid: true,
-		},
+		UserID: pgtype.UUID{Bytes: userID, Valid: true},
+		ID:     pgtype.UUID{Bytes: fileIDUUID, Valid: true},
 	})
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
 
-	// Delete file from S3
 	_, err = h.s3Client.DeleteObject(context.TODO(), &s3.DeleteObjectInput{
 		Bucket: &h.s3Bucket,
 		Key:    &file.FileUrl,
@@ -259,16 +346,9 @@ func (h *UploadHanlder) DeleteFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Delete file from db
 	if err := h.dbQueries.DeleteFileByID(r.Context(), db.DeleteFileByIDParams{
-		UserID: pgtype.UUID{
-			Bytes: userID,
-			Valid: true,
-		},
-		ID: pgtype.UUID{
-			Bytes: fileIDUUID,
-			Valid: true,
-		},
+		UserID: pgtype.UUID{Bytes: userID, Valid: true},
+		ID:     pgtype.UUID{Bytes: fileIDUUID, Valid: true},
 	}); err != nil {
 		http.Error(w, "failed to delete the file", http.StatusInternalServerError)
 		return
