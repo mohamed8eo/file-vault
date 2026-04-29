@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -478,7 +479,8 @@ func GetStorageStats() error {
 	resp, err := AuthRequest("GET", "/files/stats", nil)
 	done <- true
 	time.Sleep(10 * time.Millisecond)
-	fmt.Print("\r") // Return to start of line to overwrite spinner
+	fmt.Print("\r")
+
 	if err != nil {
 		return err
 	}
@@ -489,7 +491,9 @@ func GetStorageStats() error {
 	}
 
 	var stats map[string]any
-	json.NewDecoder(resp.Body).Decode(&stats)
+	if err := json.NewDecoder(resp.Body).Decode(&stats); err != nil {
+		return err
+	}
 
 	totalFiles, _ := stats["total_files"].(float64)
 	totalSize, _ := stats["total_size"].(float64)
@@ -505,36 +509,87 @@ func GetStorageStats() error {
 	labelCol := 12
 	countCol := 8
 	sizeCol := 12
-	totalWidth := labelCol + countCol + sizeCol + 8
 
-	border := cyan + "┌" + strings.Repeat("─", totalWidth) + "┐" + reset
-	divider := cyan + "├" + strings.Repeat("─", totalWidth) + "┤" + reset
-	footer := cyan + "└" + strings.Repeat("─", totalWidth) + "┘" + reset
-	title := bold + "📊 Storage Statistics" + reset
-	padding := strings.Repeat(" ", (totalWidth-len(title))/2)
+	// innerWidth: 1 + 12 + 3 + 8 + 3 + 12 + 1 = 40
+	innerWidth := 1 + labelCol + 3 + countCol + 3 + sizeCol + 1
+
+	hline := func(l, r string) string {
+		return cyan + l + strings.Repeat("─", innerWidth) + r + reset
+	}
+
+	// No emoji — avoids wide-char width miscalculation
+	title := "Storage Statistics"
+	titleVis := len(title) // pure ASCII, safe to use len()
+	leftPad := (innerWidth - titleVis) / 2
+	rightPad := innerWidth - titleVis - leftPad
+
+	titleLine := cyan + "│" + reset +
+		strings.Repeat(" ", leftPad) +
+		bold + title + reset +
+		strings.Repeat(" ", rightPad) +
+		cyan + "│" + reset
+
+	centerText := func(text string, width int) string {
+		leftPad := (width - len(text)) / 2
+		rightPad := width - len(text) - leftPad
+		return strings.Repeat(" ", leftPad) + text + strings.Repeat(" ", rightPad)
+	}
+
+	makeHeader := func() string {
+		return cyan + "│ " + reset +
+			centerText("Type", labelCol) +
+			cyan + " │ " + reset +
+			centerText("Count", countCol) +
+			cyan + " │ " + reset +
+			centerText("Size", sizeCol) +
+			cyan + " │" + reset
+	}
 
 	makeRow := func(label string, count int, sizeBytes int64) string {
 		coloredSize := colorizeSize(sizeBytes)
-		visibleSize := stripANSI(coloredSize)
-		sizePadding := strings.Repeat(" ", sizeCol-len(visibleSize))
-		return cyan + "│ " + fmt.Sprintf("%-12s", label) + " │ " + fmt.Sprintf("%8d", count) + " │ " + coloredSize + sizePadding + "│" + reset
+		plainSize := stripANSI(coloredSize)
+
+		// center count
+		countStr := fmt.Sprintf("%d", count)
+		countLeft := (countCol - len(countStr)) / 2
+		countRight := countCol - len(countStr) - countLeft
+		centeredCount := strings.Repeat(" ", countLeft) + countStr + strings.Repeat(" ", countRight)
+
+		// center size (with color)
+		sizeLeft := (sizeCol - len(plainSize)) / 2
+		sizeRight := sizeCol - len(plainSize) - sizeLeft
+		centeredSize := strings.Repeat(" ", sizeLeft) + coloredSize + strings.Repeat(" ", sizeRight)
+
+		return cyan + "│ " + reset +
+			centerText(label, labelCol) +
+			cyan + " │ " + reset +
+			centeredCount +
+			cyan + " │ " + reset +
+			centeredSize +
+			cyan + " │" + reset
 	}
 
-	fmt.Println(border)
-	fmt.Printf("%s│%s%s%s│%s\n", cyan, padding, title, padding, reset)
-	fmt.Println(divider)
-	fmt.Printf("%s│ %-12s │ %8s │ %-12s │%s\n", cyan, "Type", "Count", "Size", reset)
-	fmt.Println(divider)
+	fmt.Println(hline("┌", "┐"))
+	fmt.Println(titleLine)
+	fmt.Println(hline("├", "┤"))
+	fmt.Println(makeHeader())
+	fmt.Println(hline("├", "┤"))
 	fmt.Println(makeRow("Images", int(images["count"].(float64)), imageSize))
 	fmt.Println(makeRow("Videos", int(videos["count"].(float64)), videoSize))
 	fmt.Println(makeRow("Documents", int(docs["count"].(float64)), docSize))
-	fmt.Println(divider)
+	fmt.Println(hline("├", "┤"))
 	fmt.Println(makeRow("TOTAL", int(totalFiles), int64(totalSize)))
-	fmt.Println(footer)
+	fmt.Println(hline("└", "┘"))
 	fmt.Println()
 
 	return nil
 }
+
+func visibleLen(s string) int {
+	return len([]rune(stripANSI(s)))
+}
+
+var ansiRegex = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 
 func DownloadFile(id, outputPath string) error {
 	if LoadToken() == "" {
@@ -600,4 +655,3 @@ func DownloadFile(id, outputPath string) error {
 	fmt.Printf("✓ Saved: %s\n", outPath)
 	return nil
 }
-
