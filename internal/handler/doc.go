@@ -1,29 +1,55 @@
 // Package handler provides HTTP handlers for the file-vault service,
-// including user authentication, session management, and file operations.
+// including user authentication, OAuth, session management, and file operations.
 //
-// It includes:
+// Handlers
 //
-//   - Authentication handlers:
-//     Handles user registration (SignUp), login (Login), logout (Logout),
-//     and token refresh (Refresh). It uses JWT for access and refresh tokens,
-//     stores refresh tokens in the database, and manages secure HTTP-only cookies.
+// This package contains the following main handlers:
 //
-//   - File handlers:
-//     Supports uploading, retrieving, and deleting user files. Files are stored
-//     in AWS S3, while metadata is persisted in the database. File access is
-//     restricted to authenticated users.
+//   - users.go: User authentication (SignUp, Login, Refresh, Logout)
+//     * SignUp: Register new user with email/password
+//     * Login: Authenticate user and issue tokens
+//     * Refresh: Refresh access token using refresh token cookie
+//     * Logout: Clear tokens and invalidate session
 //
-// Authentication & Security:
+//   - oAuth.go: OAuth 2.0 integration (Google, GitHub)
+//     * GoogleLogin: Initiate Google OAuth flow
+//     * GoogleCallback: Handle Google OAuth callback
+//     * GithubLogin: Initiate GitHub OAuth flow
+//     * GithubCallback: Handle GitHub OAuth callback
 //
-//   - Access tokens are short-lived and returned in responses.
-//   - Refresh tokens are long-lived, stored in the database, and set as HTTP-only cookies.
-//   - Middleware is used to inject authenticated user identity into request context.
+//   - upload_files.go: File upload and management
+//     * UploadFile: Upload any file type (max 50MB)
+//     * UploadImage: Upload images only (jpg, png, gif, webp, svg, max 10MB)
+//     * UploadVideo: Upload videos only (mp4, webm, mov, avi, mkv, max 500MB)
+//     * GetFiles: List all user files
+//     * GetFileByID: Get file details by ID
+//     * DeleteFile: Delete a file
 //
-// Storage:
+// Upload Endpoints
 //
-//   - File contents are stored in S3.
-//   - File metadata and refresh tokens are stored in the database.
+//     POST /upload         - Upload any file (50MB limit)
+//     POST /upload/image   - Upload images only (10MB limit, jpg/png/gif/webp/svg)
+//     POST /upload/video   - Upload videos only (500MB limit, mp4/webm/mov/avi/mkv)
 //
-// This package is designed to work with net/http and integrates with the
-// middleware package for authentication and request context propagation.
+// Response contains CloudFront URL for direct browser access:
+//     {"id": "uuid", "message": "uploaded successfully", "url": "https://cloudfront.net/..."}
+//
+// File Storage
+//
+// Files are uploaded to AWS S3 with CloudFront distribution for fast delivery.
+// Content-Type is automatically detected for proper browser handling (streaming vs download).
+//
+// Authentication & Security
+//
+//   - Access tokens: Short-lived JWT (15 min)
+//   - Refresh tokens: Long-lived JWT (30 days), stored in DB as HTTP-only cookie
+//   - OAuth tokens: Managed via OAuth providers
+//   - Middleware injects user ID into request context
+//
+// File Access
+//
+//     - URLs use CloudFront domain (no signing required)
+//     - Videos stream directly in browser (Content-Type: video/mp4)
+//     - Images display directly in browser
+//     - Other files download via browser
 package handler

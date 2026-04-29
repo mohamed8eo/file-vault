@@ -1,36 +1,43 @@
 # File Vault
 
-A secure file storage REST API built with Go, PostgreSQL, AWS S3, and Redis.
-Supports user sign-up/login (JWT-based), secure file uploads to S3, access control, and efficient rate limiting.
+A secure file storage REST API built with Go, PostgreSQL, AWS S3, CloudFront, and Redis.
+Supports user sign-up/login (JWT + OAuth), secure file uploads to S3 with CloudFront distribution, and efficient rate limiting.
 
 ## Project Structure
 
 ```
 file-vault/
 ├── cmd/
-│   └── api/
-│       └── main.go           # Main entry point, bootstraps HTTP server and all modules
+│   ├── api/
+│   │   └── main.go           # Main entry point, HTTP server
+│   └── cli/
+│       ├── main.go           # CLI entry point
+│       └── cmd/              # CLI commands (auth, files)
 ├── internal/
-│   ├── auth/                 # Password and JWT/token logic
+│   ├── auth/                 # Password hashing and JWT logic
 │   │   ├── jwt.go
 │   │   └── password.go
-│   ├── db/                  # sqlc-generated code: Go DB access, types, functions
+│   ├── client/               # CLI client for API calls
+│   │   ├── client.go         # Token management, HTTP client
+│   │   └── files.go          # File operations (upload, list, get, delete)
+│   ├── db/                   # sqlc-generated DB code
 │   │   ├── db.go
 │   │   ├── models.go
 │   │   └── *.sql.go
-│   ├── handler/              # HTTP handlers for users (auth) and file uploads
-│   │   ├── users.go
-│   │   └── upload_files.go
-│   └── middleware/           # HTTP middleware (auth, rate limit, logging, request id)
-│       ├── auth.go
-│       ├── rateLimit.go
-│       ├── logging.go
-│       └── requestid.go
+│   ├── handler/              # HTTP handlers
+│   │   ├── users.go          # SignUp, Login, Refresh, Logout
+│   │   ├── oAuth.go          # Google & GitHub OAuth
+│   │   ├── upload_files.go   # File upload & management
+│   │   └── doc.go            # Package documentation
+│   └── middleware/           # HTTP middleware
+│       ├── auth.go           # JWT validation
+│       ├── rateLimit.go      # Redis-based rate limiting
+│       ├── logging.go        # Request logging
+│       └── requestid.go      # Request ID tracking
 ├── sql/
-│   ├── queries/              # Raw SQL queries (used by sqlc)
-│   └── schema/               # DB schema migration files
-├── go.mod / go.sum           # Dependency management
-├── sqlc.yaml                 # sqlc codegen config
+│   ├── queries/              # SQL queries for sqlc
+│   └── schema/               # Database schema
+├── go.mod / go.sum
 └── Makefile
 ```
 
@@ -42,61 +49,116 @@ file-vault/
 │                                                                 │
 │  ┌──────────┐    ┌─────────────────┐    ┌───────────────────┐   │
 │  │          │    │   Middleware    │    │    Handlers       │   │
-│  │  Client  │───▶│  • Request ID   │───▶│  • SignUp/Login   │   │
-│  │          │    │  • Logging      │    │  • Refresh/Logout │   │
-│  │  curl /  │◀───│  • Auth (JWT)   │◀───│  • UploadFile     │   │
-│  │ browser  │    │  • Rate limit   │    │  • GetFiles       │   │
-│  └──────────┘    └────────┬────────┘    │  • DeleteFile     │   │
-│                           │             └────────┬──────────┘   │
-│                           │                      │              │
-│                    ┌──────▼──────┐         ┌──────▼──────┐      │
-│                    │    Redis    │         │  PostgreSQL │      │
-│                    │  (sliding   │         │   users     │      │
-│                    │   window)   │         │   tokens    │      │
-│                    └─────────────┘         │   files     │      │
-│                                            └─────────────┘      │
-│                                                  │              │
-│                                           ┌──────▼──────┐       │
-│                                           │   AWS S3    │       │
-│                                           │ file storage│       │
-│                                           └─────────────┘       │
+│  │  CLI /   │───▶│  • Request ID   │───▶│  • SignUp/Login   │   │
+│  │  Client  │    │  • Logging      │    │  • OAuth (Google) │   │
+│  │          │◀───│  • Auth (JWT)   │◀───│  • Refresh/Logout │   │
+│  │  curl /  │    │  • Rate limit   │    │  • Upload(File)   │   │
+│  │ browser  │    └────────┬────────┘    │  • Upload(Image) │   │
+│  └──────────┘             │             │  • Upload(Video) │   │
+│                           │             │  • GetFiles      │   │
+│                    ┌──────▼──────┐      │  • DeleteFile    │   │
+│                    │    Redis    │      └────────┬──────────┘   │
+│                    │  (sliding   │               │              │
+│                    │   window)   │        ┌──────▼──────┐       │
+│                    └─────────────┘        │  PostgreSQL │       │
+│                                            │  (users,    │       │
+│                                            │   tokens,   │       │
+│                                            │   files)    │       │
+│                                            └─────────────┘       │
+│                                                  │               │
+│                                           ┌──────▼──────┐        │
+│                                           │   AWS S3    │        │
+│                                           │ (files)     │        │
+│                                           └──────┬──────┘        │
+│                                                  │               │
+│                                           ┌──────▼──────┐        │
+│                                           │ CloudFront  │        │
+│                                           │ (streaming) │        │
+│                                           └─────────────┘        │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Login/Authentication Flow
+## Authentication Flow
+
+### Email/Password
 
 1. **Sign Up** `/auth/sign-up`
-   - User sends name, email, password.
-   - Password is Argon2id-hashed; user created in DB.
-   - Access token (JWT, 15m) & refresh token (JWT, 30 days) issued.
-   - Refresh token is stored in DB and set as **HTTP-only cookie**.
+   - User sends name, email, password
+   - Password is Argon2id-hashed and stored in DB
+   - Issues access token (15m) and refresh token (30 days)
+   - Refresh token stored in DB and set as HTTP-only cookie
 
 2. **Login** `/auth/login`
-   - User sends email, password.
-   - Validates credentials against DB hash.
-   - New tokens issued, old refresh token cleared, new one set as cookie.
+   - User sends email, password
+   - Validates credentials, issues new tokens
+   - Clears old refresh token, sets new one as cookie
 
 3. **Refresh** `/auth/refresh`
-   - Expects cookie `refresh_token`.
-   - Validates JWT (refresh secret) and DB presence.
-   - Issues new access/refresh tokens, updates DB and cookie.
+   - Expects `refresh_token` cookie
+   - Validates JWT and DB presence
+   - Issues new access/refresh tokens, updates DB and cookie
 
 4. **Logout** `/auth/logout`
-   - Deletes refresh token from DB, clears cookie.
+   - Deletes refresh token from DB, clears cookie
+
+### OAuth 2.0 (Google & GitHub)
+
+1. **Initiate** `/auth/google` or `/auth/github`
+   - Redirects to OAuth provider
+   - User authorizes the application
+
+2. **Callback** `/auth/google/callback` or `/auth/github/callback`
+   - Receives OAuth code from provider
+   - Exchanges for user info
+   - Creates/updates user in DB
+   - Issues tokens like regular login
 
 ## API Endpoints
 
+### Authentication
+
 | Method | Endpoint | Auth | Description |
-|--------|---------|------|------------|
-| GET | `/` | No | Health check |
+|--------|---------|------|-------------|
 | POST | `/auth/sign-up` | No | Register new user |
 | POST | `/auth/login` | No | Login user |
 | POST | `/auth/refresh` | No | Refresh access token |
 | POST | `/auth/logout` | No | Logout user |
-| POST | `/upload` | Yes | Upload file to S3 |
-| GET | `/files` | Yes | List user's files |
-| GET | `/files/{id}` | Yes | Get file presigned URL |
-| DELETE | `/files/{id}` | Yes | Delete file |
+| GET | `/auth/google` | No | Initiate Google OAuth |
+| GET | `/auth/google/callback` | No | Google OAuth callback |
+| GET | `/auth/github` | No | Initiate GitHub OAuth |
+| GET | `/auth/github/callback` | No | GitHub OAuth callback |
+
+### File Operations
+
+| Method | Endpoint | Auth | Description |
+|--------|---------|------|-------------|
+| POST | `/upload` | Yes | Upload any file (max 50MB) |
+| POST | `/upload/image` | Yes | Upload image (max 10MB, jpg/png/gif/webp/svg) |
+| POST | `/upload/video` | Yes | Upload video (max 500MB, mp4/webm/mov/avi/mkv) |
+| GET | `/files` | Yes | List all user files |
+| GET | `/files/{id}` | Yes | Get file details with CloudFront URL |
+| DELETE | `/files/{id}` | Yes | Delete file from S3 and DB |
+
+### Health Check
+
+| Method | Endpoint | Auth | Description |
+|--------|---------|------|-------------|
+| GET | `/` | No | Health check |
+
+## File Upload Response
+
+```json
+{
+  "id": "76220f7a-8cee-4443-9aee-09ecfbda9cdc",
+  "message": "uploaded successfully",
+  "url": "https://d30aex9619h2hb.cloudfront.net/images/1234567890-photo.jpg"
+}
+```
+
+The returned URL can be used directly in browsers:
+- **Videos**: Stream directly in `<video>` tag
+- **Images**: Display directly in `<img>` tag
+- **Other files**: Download via browser
 
 ## Environment Variables
 
@@ -104,7 +166,7 @@ file-vault/
 # Database
 DB_URL=postgres://user:pass@localhost:5432/db
 
-# JWT Secrets
+# JWT Secrets (base64 encoded)
 ACCESS_TOKEN_SECRET=your-access-secret
 REFRESH_TOKEN_SECRET=your-refresh-secret
 
@@ -114,18 +176,43 @@ REDIS_URL=redis://localhost:6379
 # AWS S3
 S3_BUCKET=your-bucket-name
 S3_REGION=us-east-1
+CLOUDFRONT_DOMAIN=d1234567890.cloudfront.net
+
+# OAuth (optional)
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+GOOGLE_REDIRECT_URL=http://localhost:3000/auth/google/callback
+
+GITHUB_CLIENT_ID=your-github-client-id
+GITHUB_CLIENT_SECRET=your-github-client-secret
+GITHUB_REDIRECT_URL=http://localhost:3000/auth/github/callback
 
 # App
-PORT=8080
+PORT=3000
 IS_PRODUCTION=false
+```
+
+## CLI Commands
+
+```bash
+# Authentication
+file-vault auth login <email> <password>
+file-vault auth register <name> <email> <password>
+file-vault auth logout
+
+# File operations
+file-vault files upload <path>       # Upload file
+file-vault files list                # List all files
+file-vault files get <id>            # Get file URL (opens in browser)
+file-vault files delete <id>         # Delete file
+```
 
 ## Prerequisites
+
 - Go 1.22+
 - PostgreSQL
 - Redis
-- AWS account with S3 bucket
-
-```
+- AWS account with S3 bucket + CloudFront distribution
 
 ## Quick Start
 
@@ -145,16 +232,21 @@ make build
 # Run the server
 make run
 
+# Build CLI
+go build -o file-vault ./cmd/cli/
+
 # Run tests
 make test
 ```
 
 ## Tech Stack
 
-- **Language**: Go 1.25+
+- **Language**: Go 1.22+
 - **Database**: PostgreSQL (via pgx/v5)
 - **ORM**: sqlc
-- **Cache/Rate Limit**: Redis
+- **Cache/Rate Limit**: Redis (go-redis)
 - **Storage**: AWS S3
+- **CDN**: CloudFront
 - **Auth**: JWT (golang-jwt), Argon2id
+- **OAuth**: Google, GitHub
 - **HTTP**: stdlib net/http
