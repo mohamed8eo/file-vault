@@ -295,6 +295,60 @@ func (h *UploadHanlder) GetFiles(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
+func (h *UploadHanlder) SearchFiles(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
+
+	query := r.URL.Query().Get("q")
+	if len(query) < 2 {
+		http.Error(w, "search query must be at least 2 characters", http.StatusBadRequest)
+		return
+	}
+
+	limit := 20
+	if l := r.URL.Query().Get("limit"); l != "" {
+		v, _ := strconv.Atoi(l)
+		if v > 0 && v <= 100 {
+			limit = v
+		}
+	}
+
+	files, err := h.dbQueries.SearchFiles(r.Context(), db.SearchFilesParams{
+		UserID: pgtype.UUID{Bytes: userID, Valid: true},
+		Column2: pgtype.Text{
+			String: query,
+			Valid:  true,
+		},
+		Limit: int32(limit),
+	})
+	if err != nil {
+		http.Error(w, "failed to search files", http.StatusInternalServerError)
+		return
+	}
+
+	type fileResponse struct {
+		ID        string `json:"id"`
+		FileName  string `json:"file_name"`
+		FileURL   string `json:"file_url"`
+		FileSize  int64  `json:"file_size"`
+		CreatedAt string `json:"created_at"`
+	}
+
+	result := []fileResponse{}
+	for _, f := range files {
+		result = append(result, fileResponse{
+			ID:        f.ID.String(),
+			FileName:  f.FileName,
+			FileURL:   f.FileUrl,
+			FileSize:  f.FileSize,
+			CreatedAt: f.CreatedAt.Time.Format(time.RFC3339),
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(result)
+}
+
 func (h *UploadHanlder) GetFileByID(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
 	if !ok {

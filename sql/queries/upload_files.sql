@@ -34,3 +34,16 @@ DELETE FROM files
 WHERE
     id = $1
     AND user_id = $2;
+
+-- name: SearchFiles :many
+SELECT
+    *
+FROM
+    files
+WHERE
+    user_id = $1
+    AND file_name ILIKE '%' || $2 || '%'
+ORDER BY
+    created_at DESC
+LIMIT
+    $3;

@@ -55,14 +55,27 @@ var deleteCmd = &cobra.Command{
 	},
 }
 
+var searchCmd = &cobra.Command{
+	Use:     "search <query>",
+	Short:   "Search files by name",
+	Aliases: []string{"find"},
+	Args:    cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return client.SearchFiles(args[0], limit)
+	},
+}
+
 func init() {
 	listCmd.Flags().IntVarP(&limit, "limit", "l", 20, "Number of files to list")
 	listCmd.Flags().IntVarP(&page, "page", "p", 1, "Page number (1-based)")
 	listCmd.Flags().IntVarP(&offset, "offset", "o", 0, "Offset (alternative to page)")
 
+	searchCmd.Flags().IntVarP(&limit, "limit", "l", 20, "Max results")
+
 	filesCmd.AddCommand(listCmd)
 	filesCmd.AddCommand(uploadCmd)
 	filesCmd.AddCommand(getCmd)
 	filesCmd.AddCommand(deleteCmd)
+	filesCmd.AddCommand(searchCmd)
 	rootCmd.AddCommand(filesCmd)
 }

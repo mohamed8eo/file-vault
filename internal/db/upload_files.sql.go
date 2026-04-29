@@ -139,3 +139,50 @@ func (q *Queries) GetFilesByUser(ctx context.Context, arg GetFilesByUserParams) 
 	}
 	return items, nil
 }
+
+const searchFiles = `-- name: SearchFiles :many
+SELECT
+    id, user_id, file_name, file_url, created_at, file_size
+FROM
+    files
+WHERE
+    user_id = $1
+    AND file_name ILIKE '%' || $2 || '%'
+ORDER BY
+    created_at DESC
+LIMIT
+    $3
+`
+
+type SearchFilesParams struct {
+	UserID  pgtype.UUID
+	Column2 pgtype.Text
+	Limit   int32
+}
+
+func (q *Queries) SearchFiles(ctx context.Context, arg SearchFilesParams) ([]File, error) {
+	rows, err := q.db.Query(ctx, searchFiles, arg.UserID, arg.Column2, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []File
+	for rows.Next() {
+		var i File
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.FileName,
+			&i.FileUrl,
+			&i.CreatedAt,
+			&i.FileSize,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

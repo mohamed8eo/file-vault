@@ -280,6 +280,88 @@ func GetFile(id string) error {
 	return nil
 }
 
+func SearchFiles(query string, limit int) error {
+	if LoadToken() == "" {
+		return fmt.Errorf("not logged in, run: file-vault auth login")
+	}
+
+	url := fmt.Sprintf("%s/files/search?q=%s&limit=%d", baseURL, query, limit)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+LoadToken())
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		if err := refreshAccessToken(); err != nil {
+			return err
+		}
+		req.Header.Set("Authorization", "Bearer "+LoadToken())
+		resp, err = http.DefaultClient.Do(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to search files")
+	}
+
+	var files []map[string]any
+	json.NewDecoder(resp.Body).Decode(&files)
+
+	if len(files) == 0 {
+		fmt.Println("no files found")
+		return nil
+	}
+
+	idLen := 36
+	nameLen := 25
+	sizeLen := 20
+	dateLen := 22
+
+	fmt.Printf("Searching for: \"%s\"\n\n", query)
+
+	header := fmt.Sprintf("%-*s | %-*s | %-*s | %-*s", idLen, "id", nameLen, "name", sizeLen, "Size", dateLen, "created_at")
+	separator := strings.Repeat("-", len(header))
+	fmt.Println(header)
+	fmt.Println(separator)
+
+	for _, f := range files {
+		id, _ := f["id"].(string)
+		name, _ := f["file_name"].(string)
+		var sizeStr string
+		if size, ok := f["file_size"].(float64); ok && size > 0 {
+			sizeStr = formatFileSize(int64(size))
+		} else {
+			sizeStr = "-"
+		}
+		dateStr, _ := f["created_at"].(string)
+
+		t, err := time.Parse(time.RFC3339, dateStr)
+		if err != nil {
+			t = time.Now()
+		}
+		date := t.Format("Jan 2, 2006 at 3:04 PM")
+
+		if len(name) > nameLen {
+			name = name[:nameLen-3] + "..."
+		}
+		fmt.Printf("%-*s | %-*s | %-*s | %-*s\n", idLen, id, nameLen, name, sizeLen, sizeStr, dateLen, date)
+	}
+
+	fmt.Println()
+	fmt.Printf("Found %d file(s)\n", len(files))
+	return nil
+}
+
 func DeleteFile(id string) error {
 	if LoadToken() == "" {
 		return fmt.Errorf("not logged in, run: file-vault auth login")

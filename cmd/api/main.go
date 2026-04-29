@@ -157,6 +157,7 @@ func main() {
 	mux.Handle("POST /upload/image", uploadRateLimit(authMiddleware(http.HandlerFunc(uploadHandler.UploadImage))))
 	mux.Handle("POST /upload/video", uploadRateLimit(authMiddleware(http.HandlerFunc(uploadHandler.UploadVideo))))
 	mux.Handle("GET /files", generalRateLimit(authMiddleware(http.HandlerFunc(uploadHandler.GetFiles))))
+	mux.Handle("GET /files/search", generalRateLimit(authMiddleware(http.HandlerFunc(uploadHandler.SearchFiles))))
 	mux.Handle("GET /files/{id}", generalRateLimit(authMiddleware(http.HandlerFunc(uploadHandler.GetFileByID))))
 	mux.Handle("DELETE /files/{id}", generalRateLimit(authMiddleware(http.HandlerFunc(uploadHandler.DeleteFile))))
 
