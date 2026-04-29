@@ -67,6 +67,14 @@ var deleteManyCmd = &cobra.Command{
 	},
 }
 
+var statsCmd = &cobra.Command{
+	Use:   "stats",
+	Short: "Show storage statistics",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return client.GetStorageStats()
+	},
+}
+
 var searchCmd = &cobra.Command{
 	Use:     "search <query>",
 	Short:   "Search files by name",
@@ -107,5 +115,6 @@ func init() {
 	filesCmd.AddCommand(deleteManyCmd)
 	filesCmd.AddCommand(searchCmd)
 	filesCmd.AddCommand(downloadCmd)
+	filesCmd.AddCommand(statsCmd)
 	rootCmd.AddCommand(filesCmd)
 }

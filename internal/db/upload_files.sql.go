@@ -252,6 +252,47 @@ func (q *Queries) GetFilesFiltered(ctx context.Context, arg GetFilesFilteredPara
 	return items, nil
 }
 
+const getStorageStats = `-- name: GetStorageStats :one
+SELECT 
+    COUNT(*) as total_files,
+    COALESCE(SUM(file_size), 0) as total_size,
+    COUNT(*) FILTER (WHERE file_url ILIKE '%.jpg' OR file_url ILIKE '%.jpeg' OR file_url ILIKE '%.png' OR file_url ILIKE '%.gif' OR file_url ILIKE '%.webp' OR file_url ILIKE '%.svg') as image_count,
+    COALESCE(SUM(file_size) FILTER (WHERE file_url ILIKE '%.jpg' OR file_url ILIKE '%.jpeg' OR file_url ILIKE '%.png' OR file_url ILIKE '%.gif' OR file_url ILIKE '%.webp' OR file_url ILIKE '%.svg'), 0) as image_size,
+    COUNT(*) FILTER (WHERE file_url ILIKE '%.mp4' OR file_url ILIKE '%.webm' OR file_url ILIKE '%.mov' OR file_url ILIKE '%.avi' OR file_url ILIKE '%.mkv') as video_count,
+    COALESCE(SUM(file_size) FILTER (WHERE file_url ILIKE '%.mp4' OR file_url ILIKE '%.webm' OR file_url ILIKE '%.mov' OR file_url ILIKE '%.avi' OR file_url ILIKE '%.mkv'), 0) as video_size,
+    COUNT(*) FILTER (WHERE file_url ILIKE '%.pdf' OR file_url ILIKE '%.doc' OR file_url ILIKE '%.txt' OR file_url ILIKE '%.PDF') as document_count,
+    COALESCE(SUM(file_size) FILTER (WHERE file_url ILIKE '%.pdf' OR file_url ILIKE '%.doc' OR file_url ILIKE '%.txt' OR file_url ILIKE '%.PDF'), 0) as document_size
+FROM files
+WHERE user_id = $1
+`
+
+type GetStorageStatsRow struct {
+	TotalFiles    int64
+	TotalSize     interface{}
+	ImageCount    int64
+	ImageSize     interface{}
+	VideoCount    int64
+	VideoSize     interface{}
+	DocumentCount int64
+	DocumentSize  interface{}
+}
+
+func (q *Queries) GetStorageStats(ctx context.Context, userID pgtype.UUID) (GetStorageStatsRow, error) {
+	row := q.db.QueryRow(ctx, getStorageStats, userID)
+	var i GetStorageStatsRow
+	err := row.Scan(
+		&i.TotalFiles,
+		&i.TotalSize,
+		&i.ImageCount,
+		&i.ImageSize,
+		&i.VideoCount,
+		&i.VideoSize,
+		&i.DocumentCount,
+		&i.DocumentSize,
+	)
+	return i, err
+}
+
 const searchFiles = `-- name: SearchFiles :many
 SELECT
     id, user_id, file_name, file_url, created_at, file_size

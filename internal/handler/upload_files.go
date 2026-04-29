@@ -456,6 +456,48 @@ func (h *UploadHanlder) DeleteFile(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (h *UploadHanlder) GetStorageStats(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
+
+	stats, err := h.dbQueries.GetStorageStats(r.Context(), pgtype.UUID{Bytes: userID, Valid: true})
+	if err != nil {
+		http.Error(w, "failed to get stats", http.StatusInternalServerError)
+		return
+	}
+
+	type imageStats struct {
+		Count int64   `json:"count"`
+		Size  int64   `json:"size"`
+	}
+	type videoStats struct {
+		Count int64   `json:"count"`
+		Size  int64   `json:"size"`
+	}
+	type documentStats struct {
+		Count int64   `json:"count"`
+		Size  int64   `json:"size"`
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]any{
+		"total_files": stats.TotalFiles,
+		"total_size":  stats.TotalSize,
+		"images": imageStats{
+			Count: stats.ImageCount,
+			Size:  stats.ImageSize.(int64),
+		},
+		"videos": videoStats{
+			Count: stats.VideoCount,
+			Size:  stats.VideoSize.(int64),
+		},
+		"documents": documentStats{
+			Count: stats.DocumentCount,
+			Size:  stats.DocumentSize.(int64),
+		},
+	})
+}
+
 func (h *UploadHanlder) DeleteFiles(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
 	if !ok {

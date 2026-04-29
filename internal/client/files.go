@@ -412,6 +412,45 @@ func DeleteFiles(ids []string) error {
 	return nil
 }
 
+func GetStorageStats() error {
+	if LoadToken() == "" {
+		return fmt.Errorf("not logged in, run: file-vault auth login")
+	}
+
+	resp, err := AuthRequest("GET", "/files/stats", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to get stats")
+	}
+
+	var stats map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&stats)
+
+	totalFiles, _ := stats["total_files"].(float64)
+	totalSize, _ := stats["total_size"].(float64)
+
+	images, _ := stats["images"].(map[string]interface{})
+	videos, _ := stats["videos"].(map[string]interface{})
+	docs, _ := stats["documents"].(map[string]interface{})
+
+	fmt.Println("┌─────────────────────────────────────┐")
+	fmt.Println("│         Storage Statistics          │")
+	fmt.Println("├─────────────────────────────────────┤")
+	fmt.Printf("│ Total Files:  %-20d│\n", int(totalFiles))
+	fmt.Printf("│ Total Size:   %-20s│\n", formatFileSize(int64(totalSize)))
+	fmt.Println("├─────────────────────────────────────┤")
+	fmt.Printf("│ Images:       %-10d %-7s│\n", int(images["count"].(float64)), formatFileSize(int64(images["size"].(float64))))
+	fmt.Printf("│ Videos:       %-10d %-7s│\n", int(videos["count"].(float64)), formatFileSize(int64(videos["size"].(float64))))
+	fmt.Printf("│ Documents:    %-10d %-7s│\n", int(docs["count"].(float64)), formatFileSize(int64(docs["size"].(float64))))
+	fmt.Println("└─────────────────────────────────────┘")
+
+	return nil
+}
+
 func DownloadFile(id, outputPath string) error {
 	if LoadToken() == "" {
 		return fmt.Errorf("not logged in, run: file-vault auth login")
