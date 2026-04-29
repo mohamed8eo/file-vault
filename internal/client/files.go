@@ -11,6 +11,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
+	"time"
 )
 
 func ListFiles() error {
@@ -36,10 +38,30 @@ func ListFiles() error {
 		return nil
 	}
 
-	fmt.Println("                                  id                                  |    name     |         created_at")
-	fmt.Println("----------------------------------------------------------------------+------------+----------------------------")
+	idLen := 36
+	nameLen := 25
+	dateLen := 22
+
+	header := fmt.Sprintf("%-*s | %-*s | %-*s", idLen, "id", nameLen, "name", dateLen, "created_at")
+	separator := strings.Repeat("-", len(header))
+	fmt.Println(header)
+	fmt.Println(separator)
+
 	for _, f := range files {
-		fmt.Printf("%38v | %10v | %25v\n", f["id"], f["file_name"], f["created_at"])
+		id := f["id"].(string)
+		name := f["file_name"].(string)
+		dateStr := f["created_at"].(string)
+
+		t, err := time.Parse(time.RFC3339, dateStr)
+		if err != nil {
+			t = time.Now()
+		}
+		date := t.Format("Jan 2, 2006 at 3:04 PM")
+
+		if len(name) > nameLen {
+			name = name[:nameLen-3] + "..."
+		}
+		fmt.Printf("%-*s | %-*s | %-*s\n", idLen, id, nameLen, name, dateLen, date)
 	}
 	return nil
 }
