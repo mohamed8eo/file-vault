@@ -439,6 +439,34 @@ func colorizeSize(bytes int64) string {
 	return fmt.Sprintf("%s%s%s", color, formatFileSize(bytes), reset)
 }
 
+func stripANSI(s string) string {
+	var result strings.Builder
+	inEscape := false
+	for _, c := range s {
+		if c == '\033' {
+			inEscape = true
+			continue
+		}
+		if inEscape {
+			if c == 'm' {
+				inEscape = false
+			}
+			continue
+		}
+		result.WriteRune(c)
+	}
+	return result.String()
+}
+
+func padSizeColumn(colored string, width int) string {
+	visible := stripANSI(colored)
+	padding := width - len(visible)
+	if padding < 0 {
+		padding = 0
+	}
+	return colored + strings.Repeat(" ", padding)
+}
+
 func GetStorageStats() error {
 	if LoadToken() == "" {
 		return fmt.Errorf("not logged in, run: file-vault auth login")
@@ -485,16 +513,23 @@ func GetStorageStats() error {
 	title := bold + "📊 Storage Statistics" + reset
 	padding := strings.Repeat(" ", (totalWidth-len(title))/2)
 
+	makeRow := func(label string, count int, sizeBytes int64) string {
+		coloredSize := colorizeSize(sizeBytes)
+		visibleSize := stripANSI(coloredSize)
+		sizePadding := strings.Repeat(" ", sizeCol-len(visibleSize))
+		return cyan + "│ " + fmt.Sprintf("%-12s", label) + " │ " + fmt.Sprintf("%8d", count) + " │ " + coloredSize + sizePadding + "│" + reset
+	}
+
 	fmt.Println(border)
 	fmt.Printf("%s│%s%s%s│%s\n", cyan, padding, title, padding, reset)
 	fmt.Println(divider)
-	fmt.Printf("%s│ %-*s │ %*s │ %*s │%s\n", cyan, labelCol, "Type", countCol, "Count", sizeCol, "Size", reset)
+	fmt.Printf("%s│ %-12s │ %8s │ %12s │%s\n", cyan, "Type", "Count", "Size", reset)
 	fmt.Println(divider)
-	fmt.Printf("%s│ %-*s │ %*d │ %*s │%s\n", cyan, labelCol, "Images", countCol, int(images["count"].(float64)), sizeCol, colorizeSize(imageSize), reset)
-	fmt.Printf("%s│ %-*s │ %*d │ %*s │%s\n", cyan, labelCol, "Videos", countCol, int(videos["count"].(float64)), sizeCol, colorizeSize(videoSize), reset)
-	fmt.Printf("%s│ %-*s │ %*d │ %*s │%s\n", cyan, labelCol, "Documents", countCol, int(docs["count"].(float64)), sizeCol, colorizeSize(docSize), reset)
+	fmt.Println(makeRow("Images", int(images["count"].(float64)), imageSize))
+	fmt.Println(makeRow("Videos", int(videos["count"].(float64)), videoSize))
+	fmt.Println(makeRow("Documents", int(docs["count"].(float64)), docSize))
 	fmt.Println(divider)
-	fmt.Printf("%s│ %-*s │ %*d │ %*s │%s\n", cyan, labelCol, "TOTAL", countCol, int(totalFiles), sizeCol, colorizeSize(int64(totalSize)), reset)
+	fmt.Println(makeRow("TOTAL", int(totalFiles), int64(totalSize)))
 	fmt.Println(footer)
 	fmt.Println()
 
