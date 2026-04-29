@@ -386,3 +386,68 @@ func DeleteFile(id string) error {
 	fmt.Println("file deleted successfully")
 	return nil
 }
+
+func DownloadFile(id, outputPath string) error {
+	if LoadToken() == "" {
+		return fmt.Errorf("not logged in, run: file-vault auth login")
+	}
+
+	// Get file info
+	resp, err := AuthRequest("GET", "/files/"+id, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("file not found")
+	}
+
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	url, ok := result["file_url"].(string)
+	if !ok || url == "" {
+		return fmt.Errorf("file URL not found")
+	}
+
+	filename, ok := result["file_name"].(string)
+	if !ok {
+		filename = "download"
+	}
+
+	// Download the file
+	fmt.Printf("Downloading: %s\n", filename)
+
+	downloadResp, err := http.Get(url)
+	if err != nil {
+		return fmt.Errorf("failed to download: %w", err)
+	}
+	defer downloadResp.Body.Close()
+
+	if downloadResp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to download file")
+	}
+
+	// Create output path
+	outPath := outputPath
+	if outPath == "" {
+		outPath = filename
+	}
+
+	// Create file
+	outFile, err := os.Create(outPath)
+	if err != nil {
+		return fmt.Errorf("failed to create file: %w", err)
+	}
+	defer outFile.Close()
+
+	// Copy content
+	_, err = io.Copy(outFile, downloadResp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to save file: %w", err)
+	}
+
+	fmt.Printf("✓ Saved: %s\n", outPath)
+	return nil
+}

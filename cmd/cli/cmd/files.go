@@ -67,6 +67,20 @@ var searchCmd = &cobra.Command{
 	},
 }
 
+var downloadCmd = &cobra.Command{
+	Use:     "download <id> [output]",
+	Short:   "Download file to local machine",
+	Aliases: []string{"dl"},
+	Args:    cobra.RangeArgs(1, 2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		outputPath := ""
+		if len(args) > 1 {
+			outputPath = args[1]
+		}
+		return client.DownloadFile(args[0], outputPath)
+	},
+}
+
 func init() {
 	listCmd.Flags().IntVarP(&limit, "limit", "l", 20, "Number of files to list")
 	listCmd.Flags().IntVarP(&page, "page", "p", 1, "Page number (1-based)")
@@ -81,5 +95,6 @@ func init() {
 	filesCmd.AddCommand(getCmd)
 	filesCmd.AddCommand(deleteCmd)
 	filesCmd.AddCommand(searchCmd)
+	filesCmd.AddCommand(downloadCmd)
 	rootCmd.AddCommand(filesCmd)
 }
