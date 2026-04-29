@@ -523,7 +523,7 @@ func GetStorageStats() error {
 	fmt.Println(border)
 	fmt.Printf("%s│%s%s%s│%s\n", cyan, padding, title, padding, reset)
 	fmt.Println(divider)
-	fmt.Printf("%s│ %-12s │ %8s │ %12s │%s\n", cyan, "Type", "Count", "Size", reset)
+	fmt.Printf("%s│ %-12s │ %8s │ %-12s │%s\n", cyan, "Type", "Count", "Size", reset)
 	fmt.Println(divider)
 	fmt.Println(makeRow("Images", int(images["count"].(float64)), imageSize))
 	fmt.Println(makeRow("Videos", int(videos["count"].(float64)), videoSize))
