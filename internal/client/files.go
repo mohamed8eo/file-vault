@@ -45,7 +45,7 @@ func formatFileSize(bytes int64) string {
 	return fmt.Sprintf("%.1f %c", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
-func ListFiles(limit, page, offset int) error {
+func ListFiles(limit, page, offset int, sort, fileType string) error {
 	if LoadToken() == "" {
 		return fmt.Errorf("not logged in, run: file-vault auth login")
 	}
@@ -58,6 +58,12 @@ func ListFiles(limit, page, offset int) error {
 	go loadingSpinner(done)
 
 	url := fmt.Sprintf("%s/files?limit=%d&offset=%d", baseURL, limit, offset)
+	if sort != "" && sort != "date" {
+		url += "&sort=" + sort
+	}
+	if fileType != "" {
+		url += "&type=" + fileType
+	}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		done <- true

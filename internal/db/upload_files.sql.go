@@ -94,7 +94,7 @@ func (q *Queries) GetFileByID(ctx context.Context, arg GetFileByIDParams) (File,
 
 const getFilesByUser = `-- name: GetFilesByUser :many
 SELECT
-    id, user_id, file_name, file_url, created_at, file_size
+    id, user_id, file_name, file_url, file_size, created_at
 FROM
     files
 WHERE
@@ -113,22 +113,101 @@ type GetFilesByUserParams struct {
 	Offset int32
 }
 
-func (q *Queries) GetFilesByUser(ctx context.Context, arg GetFilesByUserParams) ([]File, error) {
+type GetFilesByUserRow struct {
+	ID        pgtype.UUID
+	UserID    pgtype.UUID
+	FileName  string
+	FileUrl   string
+	FileSize  int64
+	CreatedAt pgtype.Timestamptz
+}
+
+func (q *Queries) GetFilesByUser(ctx context.Context, arg GetFilesByUserParams) ([]GetFilesByUserRow, error) {
 	rows, err := q.db.Query(ctx, getFilesByUser, arg.UserID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []File
+	var items []GetFilesByUserRow
 	for rows.Next() {
-		var i File
+		var i GetFilesByUserRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.UserID,
 			&i.FileName,
 			&i.FileUrl,
-			&i.CreatedAt,
 			&i.FileSize,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getFilesFiltered = `-- name: GetFilesFiltered :many
+SELECT id, user_id, file_name, file_url, file_size, created_at
+FROM files
+WHERE user_id = $1
+AND (COALESCE($4, '') = '' OR file_name ILIKE '%' || $4 || '%')
+AND (
+    COALESCE($5, '') = '' OR
+    ($5 = 'image' AND (file_url ILIKE '%.jpg' OR file_url ILIKE '%.jpeg' OR file_url ILIKE '%.png' OR file_url ILIKE '%.gif' OR file_url ILIKE '%.webp' OR file_url ILIKE '%.svg' OR file_url ILIKE '%.JPG' OR file_url ILIKE '%.PNG')) OR
+    ($5 = 'video' AND (file_url ILIKE '%.mp4' OR file_url ILIKE '%.webm' OR file_url ILIKE '%.mov' OR file_url ILIKE '%.avi' OR file_url ILIKE '%.mkv' OR file_url ILIKE '%.MP4')) OR
+    ($5 = 'document' AND (file_url ILIKE '%.pdf' OR file_url ILIKE '%.doc' OR file_url ILIKE '%.txt' OR file_url ILIKE '%.PDF'))
+)
+ORDER BY
+    CASE WHEN $2 = 'name' THEN file_name END ASC,
+    CASE WHEN $2 = 'size' THEN file_size END DESC,
+    CASE WHEN $2 = '' OR $2 = 'date' THEN created_at END DESC
+LIMIT $3 OFFSET $6
+`
+
+type GetFilesFilteredParams struct {
+	UserID  pgtype.UUID
+	Column2 interface{}
+	Limit   int32
+	Column4 interface{}
+	Column5 interface{}
+	Offset  int32
+}
+
+type GetFilesFilteredRow struct {
+	ID        pgtype.UUID
+	UserID    pgtype.UUID
+	FileName  string
+	FileUrl   string
+	FileSize  int64
+	CreatedAt pgtype.Timestamptz
+}
+
+func (q *Queries) GetFilesFiltered(ctx context.Context, arg GetFilesFilteredParams) ([]GetFilesFilteredRow, error) {
+	rows, err := q.db.Query(ctx, getFilesFiltered,
+		arg.UserID,
+		arg.Column2,
+		arg.Limit,
+		arg.Column4,
+		arg.Column5,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetFilesFilteredRow
+	for rows.Next() {
+		var i GetFilesFilteredRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.FileName,
+			&i.FileUrl,
+			&i.FileSize,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}

@@ -6,9 +6,11 @@ import (
 )
 
 var (
-	limit  int
-	page   int
-	offset int
+	limit   int
+	page    int
+	offset  int
+	sort    string
+	fileType string
 )
 
 var filesCmd = &cobra.Command{
@@ -21,7 +23,7 @@ var listCmd = &cobra.Command{
 	Short:   "List all your files",
 	Aliases: []string{"ls"},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return client.ListFiles(limit, page, offset)
+		return client.ListFiles(limit, page, offset, sort, fileType)
 	},
 }
 
@@ -69,6 +71,8 @@ func init() {
 	listCmd.Flags().IntVarP(&limit, "limit", "l", 20, "Number of files to list")
 	listCmd.Flags().IntVarP(&page, "page", "p", 1, "Page number (1-based)")
 	listCmd.Flags().IntVarP(&offset, "offset", "o", 0, "Offset (alternative to page)")
+	listCmd.Flags().StringVarP(&sort, "sort", "s", "date", "Sort by: date, name, size")
+	listCmd.Flags().StringVarP(&fileType, "type", "t", "", "Filter by type: image, video, document")
 
 	searchCmd.Flags().IntVarP(&limit, "limit", "l", 20, "Max results")
 

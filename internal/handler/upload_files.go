@@ -261,10 +261,27 @@ func (h *UploadHanlder) GetFiles(w http.ResponseWriter, r *http.Request) {
 		offset = v
 	}
 
-	files, err := h.dbQueries.GetFilesByUser(r.Context(), db.GetFilesByUserParams{
-		UserID: pgtype.UUID{Bytes: userID, Valid: true},
-		Limit:  int32(limit),
-		Offset: int32(offset),
+	sort := r.URL.Query().Get("sort")
+	if sort != "" && sort != "date" && sort != "name" && sort != "size" {
+		http.Error(w, "invalid sort (date, name, size)", http.StatusBadRequest)
+		return
+	}
+
+	fileType := r.URL.Query().Get("type")
+	if fileType != "" && fileType != "image" && fileType != "video" && fileType != "document" {
+		http.Error(w, "invalid type (image, video, document)", http.StatusBadRequest)
+		return
+	}
+
+	query := r.URL.Query().Get("q")
+
+	files, err := h.dbQueries.GetFilesFiltered(r.Context(), db.GetFilesFilteredParams{
+		UserID:  pgtype.UUID{Bytes: userID, Valid: true},
+		Column2: sort,
+		Limit:   int32(limit),
+		Column4: query,
+		Column5: fileType,
+		Offset:  int32(offset),
 	})
 	if err != nil {
 		http.Error(w, "failed to fetch files", http.StatusInternalServerError)
