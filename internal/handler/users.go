@@ -1,3 +1,23 @@
+// @title			File Vault API
+// @version		1.0
+// @description	A secure file storage REST API with S3 and CloudFront
+// @termsOfService	http://swagger.io/terms/
+
+// @contact.name	API Support
+// @contact.url		https://github.com/mohamed8eo/file-vault
+// @contact.email	support@filevault.local
+
+// @license.name	Apache 2.0
+// @license.url		http://www.apache.org/licenses/LICENSE-2.0.html
+
+// @host		localhost:3000
+// @BasePath	/
+
+// @securityDefinitions.apikey	ApiKeyAuth
+// @in							header
+// @name						Authorization
+// @description				Type "Bearer" followed by a space and JWT token.
+
 package handler
 
 import (
@@ -33,6 +53,16 @@ func NewHandler(queries *db.Queries,
 	}
 }
 
+// @Summary		Register new user
+// @Description	Register a new user with name, email and password
+// @Tags			Authentication
+// @Accept			json
+// @Produce		json
+// @Param			user	body		object	true	"User registration details"
+// @Success		200		{object}	map[string]string
+// @Failure		400		{object}	map[string]string
+// @Failure		409		{object}	map[string]string
+// @Router			/auth/sign-up [post]
 func (h *Handler) SignUp(w http.ResponseWriter, r *http.Request) {
 	type request struct {
 		Name     string `json:"name"`
@@ -122,6 +152,16 @@ func (h *Handler) SignUp(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(res)
 }
 
+// @Summary		Login user
+// @Description	Authenticate user and get access/refresh tokens
+// @Tags			Authentication
+// @Accept			json
+// @Produce		json
+// @Param			credentials	body		object	true	"User login credentials"
+// @Success		200		{object}	map[string]string
+// @Failure		400		{object}	map[string]string
+// @Failure		401		{object}	map[string]string
+// @Router			/auth/login [post]
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	type request struct {
 		Email    string `json:"email"`
@@ -196,6 +236,12 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(res)
 }
 
+// @Summary		Logout user
+// @Description	Clear refresh token and logout user
+// @Tags			Authentication
+// @Produce		json
+// @Success		200		{object}	map[string]string
+// @Router			/auth/logout [post]
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie("refresh_token")
 	if err != nil {
@@ -212,6 +258,13 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	h.setRefreshCookie(w, "", time.Unix(0, 0))
 }
 
+// @Summary		Refresh access token
+// @Description	Get new access token using refresh token cookie
+// @Tags			Authentication
+// @Produce		json
+// @Success		200		{object}	map[string]string
+// @Failure		401		{object}	map[string]string
+// @Router			/auth/refresh [post]
 func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie("refresh_token")
 	if err != nil {

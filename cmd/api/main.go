@@ -1,5 +1,25 @@
 package main
 
+// @title			File Vault API
+// @version		1.0
+// @description	A secure file storage REST API with S3 and CloudFront
+// @termsOfService	http://swagger.io/terms/
+
+// @contact.name	API Support
+// @contact.url		https://github.com/mohamed8eo/file-vault
+// @contact.email	support@filevault.local
+
+// @license.name	Apache 2.0
+// @license.url		http://www.apache.org/licenses/LICENSE-2.0.html
+
+// @host		localhost:3000
+// @BasePath	/
+
+// @securityDefinitions.apikey	ApiKeyAuth
+// @in							header
+// @name						Authorization
+// @description				Type "Bearer" followed by a space and JWT token.
+
 import (
 	"context"
 	"log"
@@ -13,6 +33,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/jackc/pgx/v5"
 	"github.com/joho/godotenv"
+	"github.com/mohamed8eo/file-vault/cmd/api/docs"
 	"github.com/mohamed8eo/file-vault/internal/db"
 	"github.com/mohamed8eo/file-vault/internal/handler"
 	"github.com/mohamed8eo/file-vault/internal/middleware"
@@ -108,6 +129,24 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
+
+	// Initialize swagger docs
+	docs.SwaggerInfo.Title = "File Vault API"
+	docs.SwaggerInfo.Description = "A secure file storage REST API with S3 and CloudFront"
+	docs.SwaggerInfo.Version = "1.0"
+	docs.SwaggerInfo.Host = "localhost:" + port
+	docs.SwaggerInfo.Schemes = []string{"http", "https"}
+
+	// Route "/" must be registered AFTER more specific paths to avoid conflicts
+	// So register swagger first
+
+	// Swagger UI - use absolute path from project root
+	docsPath := "cmd/api/docs"
+	mux.Handle("/docs/", http.StripPrefix("/docs/", http.FileServer(http.Dir(docsPath))))
+	mux.HandleFunc("/docs", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, docsPath+"/index.html")
+	})
+
 	auth := handler.NewHandler(
 		cfg.dbQueries,
 		cfg.accessTokenSecret,
@@ -136,8 +175,8 @@ func main() {
 	uploadRateLimit := middleware.RateLimit(rdb, 20, time.Minute)
 	generalRateLimit := middleware.RateLimit(rdb, 100, time.Minute)
 
-	mux.Handle("GET /", generalRateLimit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Hello"))
+	mux.Handle("GET /health", generalRateLimit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("OK"))
 	})))
 
 	// authentication route.

@@ -1,0 +1,22 @@
+basePath: /
+host: localhost:3000
+info:
+  contact:
+    email: support@filevault.local
+    name: API Support
+    url: https://github.com/mohamed8eo/file-vault
+  description: A secure file storage REST API with S3 and CloudFront
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: File Vault API
+  version: "1.0"
+paths: {}
+securityDefinitions:
+  ApiKeyAuth:
+    description: Type "Bearer" followed by a space and JWT token.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

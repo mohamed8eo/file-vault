@@ -79,6 +79,17 @@ var (
 	}
 )
 
+// @Summary		Upload image
+// @Description	Upload an image file (jpg, png, gif, webp, svg - max 10MB)
+// @Tags			Files
+// @Accept		multipart/form-data
+// @Produce		json
+// @Security		ApiKeyAuth
+// @Param		file	formData	file	true	"Image file"
+// @Success		200	{object}	map[string]interface{}
+// @Failure		400	{object}	map[string]string
+// @Failure		413	{object}	map[string]string
+// @Router		/upload/image [post]
 func (h *UploadHanlder) UploadImage(w http.ResponseWriter, r *http.Request) {
 	if err := h.uploadSingle(w, r, imageConfig, FileTypeImage); err != nil {
 		http.Error(w, err.Error(), err.(*httpError).code)
@@ -86,6 +97,17 @@ func (h *UploadHanlder) UploadImage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// @Summary		Upload video
+// @Description	Upload a video file (mp4, webm, mov, avi, mkv - max 500MB)
+// @Tags			Files
+// @Accept		multipart/form-data
+// @Produce		json
+// @Security		ApiKeyAuth
+// @Param		file	formData	file	true	"Video file"
+// @Success		200	{object}	map[string]interface{}
+// @Failure		400	{object}	map[string]string
+// @Failure		413	{object}	map[string]string
+// @Router		/upload/video [post]
 func (h *UploadHanlder) UploadVideo(w http.ResponseWriter, r *http.Request) {
 	if err := h.uploadSingle(w, r, videoConfig, FileTypeVideo); err != nil {
 		http.Error(w, err.Error(), err.(*httpError).code)
@@ -93,6 +115,17 @@ func (h *UploadHanlder) UploadVideo(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// @Summary		Upload file
+// @Description	Upload any file type (max 50MB)
+// @Tags			Files
+// @Accept		multipart/form-data
+// @Produce		json
+// @Security		ApiKeyAuth
+// @Param		file	formData	file	true	"File to upload"
+// @Success		200	{object}	map[string]interface{}
+// @Failure		400	{object}	map[string]string
+// @Failure		413	{object}	map[string]string
+// @Router		/upload [post]
 func (h *UploadHanlder) UploadFile(w http.ResponseWriter, r *http.Request) {
 	if err := h.uploadSingle(w, r, fileConfig, FileTypeOther); err != nil {
 		http.Error(w, err.Error(), err.(*httpError).code)
@@ -237,6 +270,18 @@ func sanitizeFilename(name string) string {
 	return name + ext
 }
 
+// @Summary		List files
+// @Description	Get list of user's files with pagination, sorting and filtering
+// @Tags			Files
+// @Produce		json
+// @Security		ApiKeyAuth
+// @Param		limit	query		int		false	"Number of files (max 100)"
+// @Param		offset	query		int		false	"Number of files to skip"
+// @Param		page	query		int		false	"Page number"
+// @Param		sort	query		string	false	"Sort by: date, name, size"
+// @Param		type	query		string	false	"Filter by type: image, video, document"
+// @Success		200	{array}		map[string]interface{}
+// @Router		/files [get]
 func (h *UploadHanlder) GetFiles(w http.ResponseWriter, r *http.Request) {
 	userID := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
 
@@ -312,6 +357,15 @@ func (h *UploadHanlder) GetFiles(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
+// @Summary		Search files
+// @Description	Search files by name
+// @Tags			Files
+// @Produce		json
+// @Security		ApiKeyAuth
+// @Param		q		query		string	true	"Search query"
+// @Param		limit	query		int		false	"Number of results"
+// @Success		200	{array}		map[string]interface{}
+// @Router		/files/search [get]
 func (h *UploadHanlder) SearchFiles(w http.ResponseWriter, r *http.Request) {
 	userID := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
 
@@ -366,6 +420,15 @@ func (h *UploadHanlder) SearchFiles(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
+// @Summary		Get file by ID
+// @Description	Get file details including CloudFront URL
+// @Tags			Files
+// @Produce		json
+// @Security		ApiKeyAuth
+// @Param		id	path		string	true	"File ID"
+// @Success		200	{object}	map[string]interface{}
+// @Failure		404	{object}	map[string]string
+// @Router		/files/{id} [get]
 func (h *UploadHanlder) GetFileByID(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
 	if !ok {
@@ -408,6 +471,15 @@ func (h *UploadHanlder) GetFileByID(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// @Summary		Delete file
+// @Description	Delete a single file from S3 and database
+// @Tags			Files
+// @Produce		json
+// @Security		ApiKeyAuth
+// @Param		id	path		string	true	"File ID"
+// @Success		204	{object}	map[string]string
+// @Failure		404	{object}	map[string]string
+// @Router		/files/{id} [delete]
 func (h *UploadHanlder) DeleteFile(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
 	if !ok {
@@ -456,6 +528,13 @@ func (h *UploadHanlder) DeleteFile(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// @Summary		Get storage stats
+// @Description	Get storage statistics (total files, size breakdown by type)
+// @Tags			Files
+// @Produce		json
+// @Security		ApiKeyAuth
+// @Success		200	{object}	map[string]interface{}
+// @Router		/files/stats [get]
 func (h *UploadHanlder) GetStorageStats(w http.ResponseWriter, r *http.Request) {
 	userID := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
 
@@ -485,6 +564,15 @@ func (h *UploadHanlder) GetStorageStats(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
+// @Summary		Bulk delete files
+// @Description	Delete multiple files at once
+// @Tags			Files
+// @Accept		json
+// @Produce		json
+// @Security		ApiKeyAuth
+// @Param		ids	body		object	true	"Array of file IDs"
+// @Success		200	{object}	map[string]interface{}
+// @Router		/files/delete [post]
 func (h *UploadHanlder) DeleteFiles(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
 	if !ok {

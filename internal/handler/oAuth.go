@@ -36,6 +36,13 @@ func githubOAuthConfig() *oauth2.Config {
 	}
 }
 
+// @Summary		Initiate Google OAuth
+// @Description	Redirect to Google for authentication
+// @Tags			Authentication
+// @Produce		json
+// @Param			cli	query		string	false	"Client type (web/mobile)"
+// @Success		302		"Redirects to Google"
+// @Router			/auth/google [get]
 func (h *Handler) GoogleLogin(w http.ResponseWriter, r *http.Request) {
 	cli := r.URL.Query().Get("cli")
 	state := "web"
@@ -46,6 +53,14 @@ func (h *Handler) GoogleLogin(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }
 
+// @Summary		Google OAuth callback
+// @Description	Handle Google OAuth callback and issue tokens
+// @Tags			Authentication
+// @Produce		json
+// @Param			code	query		string	true	"Authorization code"
+// @Param			state	query		string	false	"State parameter"
+// @Success		200		{object}	map[string]string
+// @Router			/auth/google/callback [get]
 func (h *Handler) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query().Get("code")
 	state := r.URL.Query().Get("state")
@@ -80,6 +95,13 @@ func (h *Handler) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 	h.handleOAuthUser(w, r, userInfo.Email, userInfo.Name, userInfo.ID, "google", state)
 }
 
+// @Summary		Initiate GitHub OAuth
+// @Description	Redirect to GitHub for authentication
+// @Tags			Authentication
+// @Produce		json
+// @Param			cli	query		string	false	"Client type (web/mobile)"
+// @Success		302		"Redirects to GitHub"
+// @Router			/auth/github [get]
 func (h *Handler) GithubLogin(w http.ResponseWriter, r *http.Request) {
 	cli := r.URL.Query().Get("cli")
 	state := "web"
@@ -90,6 +112,14 @@ func (h *Handler) GithubLogin(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }
 
+// @Summary		GitHub OAuth callback
+// @Description	Handle GitHub OAuth callback and issue tokens
+// @Tags			Authentication
+// @Produce		json
+// @Param			code	query		string	true	"Authorization code"
+// @Param			state	query		string	false	"State parameter"
+// @Success		200		{object}	map[string]string
+// @Router			/auth/github/callback [get]
 func (h *Handler) GithubCallback(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query().Get("code")
 	state := r.URL.Query().Get("state")

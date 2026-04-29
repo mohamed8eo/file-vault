@@ -1,0 +1,403 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "A secure file storage REST API with S3 and CloudFront",
+        "title": "File Vault API",
+        "termsOfService": "http://swagger.io/terms/",
+        "contact": {
+            "name": "API Support",
+            "url": "https://github.com/mohamed8eo/file-vault",
+            "email": "support@filevault.local"
+        },
+        "license": {
+            "name": "Apache 2.0",
+            "url": "http://www.apache.org/licenses/LICENSE-2.0.html"
+        },
+        "version": "1.0"
+    },
+    "host": "localhost:3000",
+    "basePath": "/",
+    "schemes": ["http", "https"],
+    "paths": {
+        "/auth/sign-up": {
+            "post": {
+                "tags": ["Authentication"],
+                "summary": "Register new user",
+                "description": "Register a new user with name, email and password",
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "parameters": [{
+                    "name": "user",
+                    "in": "body",
+                    "required": true,
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "email": {"type": "string"},
+                            "password": {"type": "string"}
+                        }
+                    }
+                }],
+                "responses": {
+                    "200": {"description": "User registered successfully"},
+                    "400": {"description": "Invalid request"},
+                    "409": {"description": "User already exists"}
+                }
+            }
+        },
+        "/auth/login": {
+            "post": {
+                "tags": ["Authentication"],
+                "summary": "Login user",
+                "description": "Authenticate user and get access/refresh tokens",
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "parameters": [{
+                    "name": "credentials",
+                    "in": "body",
+                    "required": true,
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "email": {"type": "string"},
+                            "password": {"type": "string"}
+                        }
+                    }
+                }],
+                "responses": {
+                    "200": {"description": "Login successful"},
+                    "400": {"description": "Invalid request"},
+                    "401": {"description": "Invalid credentials"}
+                }
+            }
+        },
+        "/auth/refresh": {
+            "post": {
+                "tags": ["Authentication"],
+                "summary": "Refresh access token",
+                "description": "Get new access token using refresh token cookie",
+                "produces": ["application/json"],
+                "responses": {
+                    "200": {"description": "Token refreshed"},
+                    "401": {"description": "Invalid or expired refresh token"}
+                }
+            }
+        },
+        "/auth/logout": {
+            "post": {
+                "tags": ["Authentication"],
+                "summary": "Logout user",
+                "description": "Clear refresh token and logout user",
+                "produces": ["application/json"],
+                "responses": {
+                    "200": {"description": "Logout successful"}
+                }
+            }
+        },
+        "/auth/google": {
+            "get": {
+                "tags": ["Authentication"],
+                "summary": "Initiate Google OAuth",
+                "description": "Redirect to Google for authentication",
+                "produces": ["application/json"],
+                "parameters": [{
+                    "name": "cli",
+                    "in": "query",
+                    "type": "string",
+                    "description": "Client type (web/mobile)"
+                }],
+                "responses": {
+                    "302": {"description": "Redirects to Google"}
+                }
+            }
+        },
+        "/auth/google/callback": {
+            "get": {
+                "tags": ["Authentication"],
+                "summary": "Google OAuth callback",
+                "description": "Handle Google OAuth callback and issue tokens",
+                "produces": ["application/json"],
+                "parameters": [{
+                    "name": "code",
+                    "in": "query",
+                    "type": "string",
+                    "required": true,
+                    "description": "Authorization code"
+                }, {
+                    "name": "state",
+                    "in": "query",
+                    "type": "string",
+                    "description": "State parameter"
+                }],
+                "responses": {
+                    "200": {"description": "OAuth successful"}
+                }
+            }
+        },
+        "/auth/github": {
+            "get": {
+                "tags": ["Authentication"],
+                "summary": "Initiate GitHub OAuth",
+                "description": "Redirect to GitHub for authentication",
+                "produces": ["application/json"],
+                "parameters": [{
+                    "name": "cli",
+                    "in": "query",
+                    "type": "string",
+                    "description": "Client type (web/mobile)"
+                }],
+                "responses": {
+                    "302": {"description": "Redirects to GitHub"}
+                }
+            }
+        },
+        "/auth/github/callback": {
+            "get": {
+                "tags": ["Authentication"],
+                "summary": "GitHub OAuth callback",
+                "description": "Handle GitHub OAuth callback and issue tokens",
+                "produces": ["application/json"],
+                "parameters": [{
+                    "name": "code",
+                    "in": "query",
+                    "type": "string",
+                    "required": true,
+                    "description": "Authorization code"
+                }, {
+                    "name": "state",
+                    "in": "query",
+                    "type": "string",
+                    "description": "State parameter"
+                }],
+                "responses": {
+                    "200": {"description": "OAuth successful"}
+                }
+            }
+        },
+        "/upload": {
+            "post": {
+                "tags": ["Files"],
+                "summary": "Upload file",
+                "description": "Upload any file type (max 50MB)",
+                "consumes": ["multipart/form-data"],
+                "produces": ["application/json"],
+                "security": [{"ApiKeyAuth": []}],
+                "parameters": [{
+                    "name": "file",
+                    "in": "formData",
+                    "required": true,
+                    "type": "file",
+                    "description": "File to upload"
+                }],
+                "responses": {
+                    "200": {"description": "File uploaded successfully"},
+                    "400": {"description": "Invalid file"},
+                    "413": {"description": "File too large"}
+                }
+            }
+        },
+        "/upload/image": {
+            "post": {
+                "tags": ["Files"],
+                "summary": "Upload image",
+                "description": "Upload an image file (jpg, png, gif, webp, svg - max 10MB)",
+                "consumes": ["multipart/form-data"],
+                "produces": ["application/json"],
+                "security": [{"ApiKeyAuth": []}],
+                "parameters": [{
+                    "name": "file",
+                    "in": "formData",
+                    "required": true,
+                    "type": "file",
+                    "description": "Image file"
+                }],
+                "responses": {
+                    "200": {"description": "Image uploaded successfully"},
+                    "400": {"description": "Invalid file type"},
+                    "413": {"description": "File too large"}
+                }
+            }
+        },
+        "/upload/video": {
+            "post": {
+                "tags": ["Files"],
+                "summary": "Upload video",
+                "description": "Upload a video file (mp4, webm, mov, avi, mkv - max 500MB)",
+                "consumes": ["multipart/form-data"],
+                "produces": ["application/json"],
+                "security": [{"ApiKeyAuth": []}],
+                "parameters": [{
+                    "name": "file",
+                    "in": "formData",
+                    "required": true,
+                    "type": "file",
+                    "description": "Video file"
+                }],
+                "responses": {
+                    "200": {"description": "Video uploaded successfully"},
+                    "400": {"description": "Invalid file type"},
+                    "413": {"description": "File too large"}
+                }
+            }
+        },
+        "/files": {
+            "get": {
+                "tags": ["Files"],
+                "summary": "List files",
+                "description": "Get list of user's files with pagination, sorting and filtering",
+                "produces": ["application/json"],
+                "security": [{"ApiKeyAuth": []}],
+                "parameters": [{
+                    "name": "limit",
+                    "in": "query",
+                    "type": "integer",
+                    "description": "Number of files (max 100)"
+                }, {
+                    "name": "offset",
+                    "in": "query",
+                    "type": "integer",
+                    "description": "Number of files to skip"
+                }, {
+                    "name": "page",
+                    "in": "query",
+                    "type": "integer",
+                    "description": "Page number"
+                }, {
+                    "name": "sort",
+                    "in": "query",
+                    "type": "string",
+                    "description": "Sort by: date, name, size"
+                }, {
+                    "name": "type",
+                    "in": "query",
+                    "type": "string",
+                    "description": "Filter by type: image, video, document"
+                }],
+                "responses": {
+                    "200": {"description": "Files list"}
+                }
+            }
+        },
+        "/files/search": {
+            "get": {
+                "tags": ["Files"],
+                "summary": "Search files",
+                "description": "Search files by name",
+                "produces": ["application/json"],
+                "security": [{"ApiKeyAuth": []}],
+                "parameters": [{
+                    "name": "q",
+                    "in": "query",
+                    "type": "string",
+                    "required": true,
+                    "description": "Search query"
+                }, {
+                    "name": "limit",
+                    "in": "query",
+                    "type": "integer",
+                    "description": "Number of results"
+                }],
+                "responses": {
+                    "200": {"description": "Search results"}
+                }
+            }
+        },
+        "/files/stats": {
+            "get": {
+                "tags": ["Files"],
+                "summary": "Get storage stats",
+                "description": "Get storage statistics (total files, size breakdown by type)",
+                "produces": ["application/json"],
+                "security": [{"ApiKeyAuth": []}],
+                "responses": {
+                    "200": {"description": "Storage statistics"}
+                }
+            }
+        },
+        "/files/{id}": {
+            "get": {
+                "tags": ["Files"],
+                "summary": "Get file by ID",
+                "description": "Get file details including CloudFront URL",
+                "produces": ["application/json"],
+                "security": [{"ApiKeyAuth": []}],
+                "parameters": [{
+                    "name": "id",
+                    "in": "path",
+                    "type": "string",
+                    "required": true,
+                    "description": "File ID"
+                }],
+                "responses": {
+                    "200": {"description": "File details"},
+                    "404": {"description": "File not found"}
+                }
+            },
+            "delete": {
+                "tags": ["Files"],
+                "summary": "Delete file",
+                "description": "Delete a single file from S3 and database",
+                "produces": ["application/json"],
+                "security": [{"ApiKeyAuth": []}],
+                "parameters": [{
+                    "name": "id",
+                    "in": "path",
+                    "type": "string",
+                    "required": true,
+                    "description": "File ID"
+                }],
+                "responses": {
+                    "204": {"description": "File deleted"},
+                    "404": {"description": "File not found"}
+                }
+            }
+        },
+        "/files/delete": {
+            "post": {
+                "tags": ["Files"],
+                "summary": "Bulk delete files",
+                "description": "Delete multiple files at once",
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "security": [{"ApiKeyAuth": []}],
+                "parameters": [{
+                    "name": "ids",
+                    "in": "body",
+                    "required": true,
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "ids": {
+                                "type": "array",
+                                "items": {"type": "string"}
+                            }
+                        }
+                    }
+                }],
+                "responses": {
+                    "200": {"description": "Files deleted"}
+                }
+            }
+        },
+        "/health": {
+            "get": {
+                "tags": ["Health"],
+                "summary": "Health check",
+                "description": "Check if the server is running",
+                "produces": ["text/plain"],
+                "responses": {
+                    "200": {"description": "Server is healthy"}
+                }
+            }
+        }
+    },
+    "securityDefinitions": {
+        "ApiKeyAuth": {
+            "type": "apiKey",
+            "in": "header",
+            "name": "Authorization",
+            "description": "Type 'Bearer' followed by a space and JWT token."
+        }
+    }
+}
