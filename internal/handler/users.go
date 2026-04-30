@@ -114,16 +114,32 @@ func (h *Handler) SignUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Send OTP
-	if !h.SendOTP(w, r, userData.Email, userData.ID.Bytes) {
+	// Generate tokens directly (OTP verification disabled for now)
+	accessToken, refreshToken, err := h.generateTokens(string(userData.ID.Bytes[:]))
+	if err != nil {
+		http.Error(w, "failed to generate token", http.StatusInternalServerError)
 		return
 	}
 
+	if _, err := h.queries.CreateRefreshToken(r.Context(), db.CreateRefreshTokenParams{
+		Token:  refreshToken,
+		UserID: userData.ID,
+		ExpiresAt: pgtype.Timestamp{
+			Time:  time.Now().Add(refreshTokenExpiry),
+			Valid: true,
+		},
+	}); err != nil {
+		http.Error(w, "failed to save refresh token", http.StatusInternalServerError)
+		return
+	}
+
+	h.setRefreshCookie(w, refreshToken, time.Now().Add(refreshTokenExpiry))
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]string{
-		"message": "User created successfully. Check your email for the verification OTP.",
-		"email":   userData.Email,
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"name":         userData.Name,
+		"email":        userData.Email,
+		"access_token": accessToken,
 	})
 	return
 }
