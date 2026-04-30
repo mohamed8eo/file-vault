@@ -9,7 +9,14 @@ import (
 	"path/filepath"
 )
 
-const baseURL = "http://localhost:3000"
+var baseURL = getBaseURL()
+
+func getBaseURL() string {
+	if url := os.Getenv("API_BASE_URL"); url != "" {
+		return url
+	}
+	return "http://localhost:3000"
+}
 
 type config struct {
 	AccessToken  string `json:"access_token"`

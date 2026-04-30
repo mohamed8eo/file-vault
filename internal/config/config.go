@@ -10,6 +10,9 @@ type Config struct {
 	// Server
 	Port string
 
+	// API (for CLI)
+	APIBaseURL string
+
 	// Database
 	DBURL string
 
@@ -47,6 +50,7 @@ func Load() *Config {
 
 	return &Config{
 		Port:                  getEnv("PORT", "3000"),
+		APIBaseURL:            getEnv("API_BASE_URL", "http://localhost:3000"),
 		DBURL:                 getEnv("DB_URL", ""),
 		AccessTokenSecret:     getEnv("ACCESS_TOKEN_SECRET", ""),
 		RefreshTokenSecret:    getEnv("REFRESH_TOKEN_SECRET", ""),
