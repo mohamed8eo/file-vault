@@ -186,6 +186,7 @@ func main() {
 	// -- Auth --
 	mux.Handle("POST /auth/sign-up", loginStack(http.HandlerFunc(auth.SignUp)))
 	mux.Handle("POST /auth/login", loginStack(http.HandlerFunc(auth.Login)))
+	mux.Handle("POST /auth/verify-otp", loginStack(http.HandlerFunc(auth.VerifyOTP)))
 	mux.Handle("POST /auth/refresh", loginStack(http.HandlerFunc(auth.Refresh)))
 	mux.Handle("POST /auth/logout", loginStack(http.HandlerFunc(auth.Logout)))
 

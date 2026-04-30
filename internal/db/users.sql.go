@@ -17,7 +17,7 @@ INSERT INTO
 VALUES
     ($1, $2, $3, $4, $5)
 RETURNING
-    id, email, name, hashed_password, created_at, updated_at, provider, provider_id
+    id, email, name, hashed_password, created_at, updated_at, provider, provider_id, otp, otp_expires_at, verified_at
 `
 
 type CreateUserParams struct {
@@ -46,13 +46,16 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.UpdatedAt,
 		&i.Provider,
 		&i.ProviderID,
+		&i.Otp,
+		&i.OtpExpiresAt,
+		&i.VerifiedAt,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT
-    id, email, name, hashed_password, created_at, updated_at, provider, provider_id
+    id, email, name, hashed_password, created_at, updated_at, provider, provider_id, otp, otp_expires_at, verified_at
 FROM
     users
 WHERE
@@ -71,13 +74,16 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.UpdatedAt,
 		&i.Provider,
 		&i.ProviderID,
+		&i.Otp,
+		&i.OtpExpiresAt,
+		&i.VerifiedAt,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
 SELECT
-    id, email, name, hashed_password, created_at, updated_at, provider, provider_id
+    id, email, name, hashed_password, created_at, updated_at, provider, provider_id, otp, otp_expires_at, verified_at
 FROM
     users
 WHERE
@@ -96,13 +102,16 @@ func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
 		&i.UpdatedAt,
 		&i.Provider,
 		&i.ProviderID,
+		&i.Otp,
+		&i.OtpExpiresAt,
+		&i.VerifiedAt,
 	)
 	return i, err
 }
 
 const getUsers = `-- name: GetUsers :many
 SELECT
-    id, email, name, hashed_password, created_at, updated_at, provider, provider_id
+    id, email, name, hashed_password, created_at, updated_at, provider, provider_id, otp, otp_expires_at, verified_at
 FROM
     users
 LIMIT
@@ -127,6 +136,9 @@ func (q *Queries) GetUsers(ctx context.Context) ([]User, error) {
 			&i.UpdatedAt,
 			&i.Provider,
 			&i.ProviderID,
+			&i.Otp,
+			&i.OtpExpiresAt,
+			&i.VerifiedAt,
 		); err != nil {
 			return nil, err
 		}

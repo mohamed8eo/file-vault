@@ -83,12 +83,12 @@ func (h *Handler) SignUp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// check if user Already exist or not
-	user, err := h.queries.GetUserByEmail(r.Context(), req.Email)
+	exist, err := h.queries.GetUserByEmail(r.Context(), req.Email)
 	if err != nil && err != pgx.ErrNoRows {
 		http.Error(w, "failed to check user", http.StatusInternalServerError)
 		return
 	}
-	if user.Email != "" {
+	if exist.Email != "" {
 		http.Error(w, "email already exists", http.StatusConflict)
 		return
 	}
@@ -114,42 +114,18 @@ func (h *Handler) SignUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userIDStr := userData.ID.String()
-
-	accessToken, refreshToken, err := h.generateTokens(userIDStr)
-	if err != nil {
-		http.Error(w, "failed to generate tokens", http.StatusInternalServerError)
+	// Send OTP
+	if !h.SendOTP(w, r, userData.Email, userData.ID.Bytes) {
 		return
 	}
 
-	if _, err := h.queries.CreateRefreshToken(r.Context(), db.CreateRefreshTokenParams{
-		Token:  refreshToken,
-		UserID: userData.ID,
-		ExpiresAt: pgtype.Timestamp{
-			Time:  time.Now().Add(30 * 24 * time.Hour),
-			Valid: true,
-		},
-	}); err != nil {
-		http.Error(w, "falied to create refresh token on db", http.StatusInternalServerError)
-		return
-	}
-
-	type response struct {
-		Name        string `json:"name"`
-		Email       string `json:"email"`
-		AccessToken string `json:"access_token"`
-	}
-
-	res := &response{
-		Name:        userData.Name,
-		Email:       userData.Email,
-		AccessToken: accessToken,
-	}
-
-	h.setRefreshCookie(w, refreshToken, time.Now().Add(refreshTokenExpiry))
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(res)
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "User created successfully. Check your email for the verification OTP.",
+		"email":   userData.Email,
+	})
+	return
 }
 
 // @Summary		Login user

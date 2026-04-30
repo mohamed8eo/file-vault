@@ -44,4 +44,7 @@ type User struct {
 	UpdatedAt      pgtype.Timestamp
 	Provider       string
 	ProviderID     string
+	Otp            pgtype.Text
+	OtpExpiresAt   pgtype.Timestamp
+	VerifiedAt     pgtype.Timestamp
 }
