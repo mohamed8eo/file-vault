@@ -119,43 +119,10 @@ func main() {
 		log.Fatalf("error: %s\n", err.Error())
 	}
 
-	rdb := redis.NewClient(parseRedisURL)
+	var rdb *redis.Client
+	rdb = redis.NewClient(parseRedisURL)
 
-	authMiddleware := middleware.Auth(cfg.AccessTokenSecret)
-
-	loginRL := middleware.RateLimit(rdb, 10, time.Minute)
-	uploadRL := middleware.RateLimit(rdb, 20, time.Minute)
-	generalRL := middleware.RateLimit(rdb, 100, time.Minute)
-
-	loginStack := middleware.CreateStack(loginRL)
-	uploadStack := middleware.CreateStack(uploadRL, authMiddleware)
-	fileStack := middleware.CreateStack(generalRL, authMiddleware)
-
-	mux.Handle("GET /health", generalRL(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("OK"))
-	})))
-
-	mux.Handle("POST /auth/sign-up", loginStack(http.HandlerFunc(auth.SignUp)))
-	mux.Handle("POST /auth/login", loginStack(http.HandlerFunc(auth.Login)))
-	mux.Handle("POST /auth/verify-otp", loginStack(http.HandlerFunc(auth.VerifyOTP)))
-	mux.Handle("POST /auth/refresh", loginStack(http.HandlerFunc(auth.Refresh)))
-	mux.Handle("POST /auth/logout", loginStack(http.HandlerFunc(auth.Logout)))
-
-	mux.Handle("GET /auth/google", loginStack(http.HandlerFunc(auth.GoogleLogin)))
-	mux.Handle("GET /auth/google/callback", loginStack(http.HandlerFunc(auth.GoogleCallback)))
-	mux.Handle("GET /auth/github", loginStack(http.HandlerFunc(auth.GithubLogin)))
-	mux.Handle("GET /auth/github/callback", loginStack(http.HandlerFunc(auth.GithubCallback)))
-
-	mux.Handle("POST /upload", uploadStack(http.HandlerFunc(uploadHandler.UploadFile)))
-	mux.Handle("POST /upload/image", uploadStack(http.HandlerFunc(uploadHandler.UploadImage)))
-	mux.Handle("POST /upload/video", uploadStack(http.HandlerFunc(uploadHandler.UploadVideo)))
-
-	mux.Handle("GET /files", fileStack(http.HandlerFunc(uploadHandler.GetFiles)))
-	mux.Handle("GET /files/search", fileStack(http.HandlerFunc(uploadHandler.SearchFiles)))
-	mux.Handle("GET /files/stats", fileStack(http.HandlerFunc(uploadHandler.GetStorageStats)))
-	mux.Handle("GET /files/{id}", fileStack(http.HandlerFunc(uploadHandler.GetFileByID)))
-	mux.Handle("DELETE /files/{id}", fileStack(http.HandlerFunc(uploadHandler.DeleteFile)))
-	mux.Handle("POST /files/delete", fileStack(http.HandlerFunc(uploadHandler.DeleteFiles)))
+	registerRoutes(mux, auth, uploadHandler, rdb, cfg.AccessTokenSecret)
 
 	logCh := middleware.StartLogWorker(dbQueries)
 	wrappedMux := middleware.RequestID(middleware.Logging(logCh)(mux))
