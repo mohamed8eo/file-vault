@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -25,7 +26,6 @@ type Address struct {
 
 func SendOTPEmail(to, otp string) error {
 	devMode := os.Getenv("DEV_MODE") == "true"
-	smtpUser := os.Getenv("SMTP_USER")
 	mailtrapAPIKey := os.Getenv("MAILTRAP_API_KEY")
 	mailtrapInboxID := os.Getenv("MAILTRAP_INBOX_ID")
 
@@ -47,6 +47,10 @@ func SendOTPEmail(to, otp string) error {
 	// Check if Mailtrap API is configured
 	if mailtrapAPIKey == "" {
 		return fmt.Errorf("MAILTRAP_API_KEY not configured. Set DEV_MODE=true for development")
+	}
+
+	if mailtrapInboxID == "" {
+		return fmt.Errorf("MAILTRAP_INBOX_ID not configured")
 	}
 
 	slog.Info("Sending OTP via Mailtrap API", "to", to, "inbox_id", mailtrapInboxID)
@@ -79,12 +83,8 @@ func SendOTPEmail(to, otp string) error {
 		return fmt.Errorf("failed to marshal email: %w", err)
 	}
 
-	// Use sandbox endpoint if inbox ID is provided
+	// Mailtrap Inbox API endpoint
 	url := fmt.Sprintf("https://mailtrap.io/api/v1/inboxes/%s/messages", mailtrapInboxID)
-	if smtpUser == "sandbox" {
-		// Use sandbox mode
-		url = fmt.Sprintf("https://mailtrap.io/api/v1/inboxes/%s/messages", mailtrapInboxID)
-	}
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
@@ -102,9 +102,12 @@ func SendOTPEmail(to, otp string) error {
 	}
 	defer resp.Body.Close()
 
+	// Read response body for debugging
+	respBody, _ := io.ReadAll(resp.Body)
+	slog.Info("Mailtrap response", "status", resp.Status, "body", string(respBody))
+
 	if resp.StatusCode >= 400 {
-		slog.Error("Mailtrap API error", "status", resp.Status)
-		return fmt.Errorf("mailtrap API error: status %d", resp.Status)
+		return fmt.Errorf("mailtrap API error: status %d, body: %s", resp.Status, respBody)
 	}
 
 	slog.Info("OTP email sent successfully via Mailtrap API", "to", to)
