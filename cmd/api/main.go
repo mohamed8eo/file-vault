@@ -119,8 +119,7 @@ func main() {
 		log.Fatalf("error: %s\n", err.Error())
 	}
 
-	var rdb *redis.Client
-	rdb = redis.NewClient(parseRedisURL)
+	rdb := redis.NewClient(parseRedisURL)
 
 	registerRoutes(mux, auth, uploadHandler, rdb, cfg.AccessTokenSecret)
 
