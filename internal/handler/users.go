@@ -77,8 +77,21 @@ func (h *Handler) SignUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Name == "" || req.Email == "" || req.Password == "" {
-		http.Error(w, "name & email & password are require", http.StatusBadRequest)
+	// Validate name
+	if errMsg := validateName(req.Name); errMsg != "" {
+		http.Error(w, errMsg, http.StatusBadRequest)
+		return
+	}
+
+	// Validate email
+	if errMsg := validateEmail(req.Email); errMsg != "" {
+		http.Error(w, errMsg, http.StatusBadRequest)
+		return
+	}
+
+	// Validate password
+	if errMsg := validatePassword(req.Password); errMsg != "" {
+		http.Error(w, errMsg, http.StatusBadRequest)
 		return
 	}
 
