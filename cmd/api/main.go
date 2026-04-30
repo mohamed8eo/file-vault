@@ -29,11 +29,11 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/config"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/jackc/pgx/v5"
-	"github.com/joho/godotenv"
 	"github.com/mohamed8eo/file-vault/cmd/api/docs"
+	"github.com/mohamed8eo/file-vault/internal/config"
 	"github.com/mohamed8eo/file-vault/internal/db"
 	"github.com/mohamed8eo/file-vault/internal/handler"
 	"github.com/mohamed8eo/file-vault/internal/middleware"
@@ -55,9 +55,13 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
-	godotenv.Load(".env")
+	// Use centralized config
+	cfg := config.Load()
 
-	dbURL := os.Getenv("DB_URL")
+	dbURL := cfg.DBURL
+	if dbURL == "" {
+		log.Fatal("DB_URL must be set")
+	}
 	if dbURL == "" {
 		log.Fatal("DB_URL must be set")
 	}
@@ -70,49 +74,49 @@ func main() {
 
 	dbQueries := db.New(conn)
 
-	accessTokenSecret := os.Getenv("ACCESS_TOKEN_SECRET")
+	accessTokenSecret := cfg.AccessTokenSecret
 	if accessTokenSecret == "" {
 		log.Fatal("accessTokenSecret must be set")
 	}
 
-	refreshTokenSecret := os.Getenv("REFRESH_TOKEN_SECRET")
+	refreshTokenSecret := cfg.RefreshTokenSecret
 	if refreshTokenSecret == "" {
 		log.Fatal("refreshTokenSecret must be set")
 	}
 
-	redisURL := os.Getenv("REDIS_URL")
+	redisURL := cfg.RedisURL
 	if redisURL == "" {
-		log.Fatal("radis must be set")
+		log.Fatal("REDIS_URL must be set")
 	}
 
-	isProduction := os.Getenv("IS_PRODUCTION") == "true"
+	isProduction := cfg.IsProduction
 
-	s3Bucket := os.Getenv("S3_BUCKET")
+	s3Bucket := cfg.S3Bucket
 	if s3Bucket == "" {
 		log.Fatal("S3_BUCKET environment variable is not set")
 	}
 
-	s3Region := os.Getenv("S3_REGION")
+	s3Region := cfg.S3Region
 	if s3Region == "" {
 		log.Fatal("S3_REGION environment variable is not set")
 	}
 
-	awsCfg, err := config.LoadDefaultConfig(
+	awsCfg, err := awsconfig.LoadDefaultConfig(
 		context.TODO(),
-		config.WithRegion(s3Region),
+		awsconfig.WithRegion(s3Region),
 	)
 	if err != nil {
 		log.Fatalf("error: %s\n", err.Error())
 	}
 
-	s3CloudFront := os.Getenv("CLOUDFRONT_DOMAIN")
+	s3CloudFront := cfg.CloudFrontURL
 	if s3CloudFront == "" {
-		log.Fatal("S3_REGION environment variable is not set")
+		log.Fatal("CLOUDFRONT_DOMAIN environment variable is not set")
 	}
 
 	client := s3.NewFromConfig(awsCfg)
 
-	cfg := &apiConfig{
+	appCfg := &apiConfig{
 		dbQueries:          dbQueries,
 		accessTokenSecret:  accessTokenSecret,
 		refreshTokenSecret: refreshTokenSecret,
@@ -123,9 +127,9 @@ func main() {
 		s3CloudFront:       s3CloudFront,
 	}
 
-	port := os.Getenv("PORT")
+	port := cfg.Port
 	if port == "" {
-		port = "8080"
+		port = "3000"
 	}
 
 	mux := http.NewServeMux()
@@ -148,17 +152,17 @@ func main() {
 	})
 
 	auth := handler.NewHandler(
-		cfg.dbQueries,
-		cfg.accessTokenSecret,
-		cfg.refreshTokenSecret,
-		cfg.isProduction,
+		appCfg.dbQueries,
+		appCfg.accessTokenSecret,
+		appCfg.refreshTokenSecret,
+		appCfg.isProduction,
 	)
 	uploadHandler := handler.NewUploadHandler(
-		cfg.dbQueries,
-		cfg.s3Bucket,
-		cfg.s3Region,
-		cfg.s3CloudFront,
-		cfg.s3Client,
+		appCfg.dbQueries,
+		appCfg.s3Bucket,
+		appCfg.s3Region,
+		appCfg.s3CloudFront,
+		appCfg.s3Client,
 	)
 
 	parseRedisURL, err := redis.ParseURL(redisURL)
@@ -168,7 +172,7 @@ func main() {
 
 	rdb := redis.NewClient(parseRedisURL)
 
-	authMiddleware := middleware.Auth(cfg.accessTokenSecret)
+	authMiddleware := middleware.Auth(appCfg.accessTokenSecret)
 
 	loginRL := middleware.RateLimit(rdb, 10, time.Minute)
 	uploadRL := middleware.RateLimit(rdb, 20, time.Minute)
