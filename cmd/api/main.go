@@ -40,33 +40,35 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-type apiConfig struct {
-	dbQueries          *db.Queries
-	accessTokenSecret  string
-	refreshTokenSecret string
-	isProduction       bool
-	s3Bucket           string
-	s3Region           string
-	s3Client           *s3.Client
-	s3CloudFront       string
-}
-
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
-	// Use centralized config
 	cfg := config.Load()
 
-	dbURL := cfg.DBURL
-	if dbURL == "" {
+	if cfg.DBURL == "" {
 		log.Fatal("DB_URL must be set")
 	}
-	if dbURL == "" {
-		log.Fatal("DB_URL must be set")
+	if cfg.AccessTokenSecret == "" {
+		log.Fatal("ACCESS_TOKEN_SECRET must be set")
+	}
+	if cfg.RefreshTokenSecret == "" {
+		log.Fatal("REFRESH_TOKEN_SECRET must be set")
+	}
+	if cfg.RedisURL == "" {
+		log.Fatal("REDIS_URL must be set")
+	}
+	if cfg.S3Bucket == "" {
+		log.Fatal("S3_BUCKET must be set")
+	}
+	if cfg.S3Region == "" {
+		log.Fatal("S3_REGION must be set")
+	}
+	if cfg.CloudFrontURL == "" {
+		log.Fatal("CLOUDFRONT_DOMAIN must be set")
 	}
 
-	conn, err := pgx.Connect(context.Background(), dbURL)
+	conn, err := pgx.Connect(context.Background(), cfg.DBURL)
 	if err != nil {
 		log.Fatalf("error: %s\n", err.Error())
 	}
@@ -74,58 +76,15 @@ func main() {
 
 	dbQueries := db.New(conn)
 
-	accessTokenSecret := cfg.AccessTokenSecret
-	if accessTokenSecret == "" {
-		log.Fatal("accessTokenSecret must be set")
-	}
-
-	refreshTokenSecret := cfg.RefreshTokenSecret
-	if refreshTokenSecret == "" {
-		log.Fatal("refreshTokenSecret must be set")
-	}
-
-	redisURL := cfg.RedisURL
-	if redisURL == "" {
-		log.Fatal("REDIS_URL must be set")
-	}
-
-	isProduction := cfg.IsProduction
-
-	s3Bucket := cfg.S3Bucket
-	if s3Bucket == "" {
-		log.Fatal("S3_BUCKET environment variable is not set")
-	}
-
-	s3Region := cfg.S3Region
-	if s3Region == "" {
-		log.Fatal("S3_REGION environment variable is not set")
-	}
-
 	awsCfg, err := awsconfig.LoadDefaultConfig(
 		context.TODO(),
-		awsconfig.WithRegion(s3Region),
+		awsconfig.WithRegion(cfg.S3Region),
 	)
 	if err != nil {
 		log.Fatalf("error: %s\n", err.Error())
 	}
 
-	s3CloudFront := cfg.CloudFrontURL
-	if s3CloudFront == "" {
-		log.Fatal("CLOUDFRONT_DOMAIN environment variable is not set")
-	}
-
-	client := s3.NewFromConfig(awsCfg)
-
-	appCfg := &apiConfig{
-		dbQueries:          dbQueries,
-		accessTokenSecret:  accessTokenSecret,
-		refreshTokenSecret: refreshTokenSecret,
-		isProduction:       isProduction,
-		s3Region:           s3Region,
-		s3Bucket:           s3Bucket,
-		s3Client:           client,
-		s3CloudFront:       s3CloudFront,
-	}
+	s3Client := s3.NewFromConfig(awsCfg)
 
 	port := cfg.Port
 	if port == "" {
@@ -134,51 +93,40 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	// Initialize swagger docs
 	docs.SwaggerInfo.Title = "File Vault API"
 	docs.SwaggerInfo.Description = "A secure file storage REST API with S3 and CloudFront"
 	docs.SwaggerInfo.Version = "1.0"
 	docs.SwaggerInfo.Host = "localhost:" + port
 	docs.SwaggerInfo.Schemes = []string{"http", "https"}
 
-	// Route "/" must be registered AFTER more specific paths to avoid conflicts
-	// So register swagger first
-
-	// Swagger UI - use absolute path from project root
 	docsPath := "cmd/api/docs"
 	mux.Handle("/docs/", http.StripPrefix("/docs/", http.FileServer(http.Dir(docsPath))))
 	mux.HandleFunc("/docs", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, docsPath+"/index.html")
 	})
 
-	auth := handler.NewHandler(
-		appCfg.dbQueries,
-		appCfg.accessTokenSecret,
-		appCfg.refreshTokenSecret,
-		appCfg.isProduction,
-	)
+	auth := handler.NewHandler(dbQueries, cfg)
 	uploadHandler := handler.NewUploadHandler(
-		appCfg.dbQueries,
-		appCfg.s3Bucket,
-		appCfg.s3Region,
-		appCfg.s3CloudFront,
-		appCfg.s3Client,
+		dbQueries,
+		cfg.S3Bucket,
+		cfg.S3Region,
+		cfg.CloudFrontURL,
+		s3Client,
 	)
 
-	parseRedisURL, err := redis.ParseURL(redisURL)
+	parseRedisURL, err := redis.ParseURL(cfg.RedisURL)
 	if err != nil {
 		log.Fatalf("error: %s\n", err.Error())
 	}
 
 	rdb := redis.NewClient(parseRedisURL)
 
-	authMiddleware := middleware.Auth(appCfg.accessTokenSecret)
+	authMiddleware := middleware.Auth(cfg.AccessTokenSecret)
 
 	loginRL := middleware.RateLimit(rdb, 10, time.Minute)
 	uploadRL := middleware.RateLimit(rdb, 20, time.Minute)
 	generalRL := middleware.RateLimit(rdb, 100, time.Minute)
 
-	// Prebuilt stacks
 	loginStack := middleware.CreateStack(loginRL)
 	uploadStack := middleware.CreateStack(uploadRL, authMiddleware)
 	fileStack := middleware.CreateStack(generalRL, authMiddleware)
@@ -187,25 +135,21 @@ func main() {
 		w.Write([]byte("OK"))
 	})))
 
-	// -- Auth --
 	mux.Handle("POST /auth/sign-up", loginStack(http.HandlerFunc(auth.SignUp)))
 	mux.Handle("POST /auth/login", loginStack(http.HandlerFunc(auth.Login)))
 	mux.Handle("POST /auth/verify-otp", loginStack(http.HandlerFunc(auth.VerifyOTP)))
 	mux.Handle("POST /auth/refresh", loginStack(http.HandlerFunc(auth.Refresh)))
 	mux.Handle("POST /auth/logout", loginStack(http.HandlerFunc(auth.Logout)))
 
-	// -- OAuth --
 	mux.Handle("GET /auth/google", loginStack(http.HandlerFunc(auth.GoogleLogin)))
 	mux.Handle("GET /auth/google/callback", loginStack(http.HandlerFunc(auth.GoogleCallback)))
 	mux.Handle("GET /auth/github", loginStack(http.HandlerFunc(auth.GithubLogin)))
 	mux.Handle("GET /auth/github/callback", loginStack(http.HandlerFunc(auth.GithubCallback)))
 
-	// -- Upload --
 	mux.Handle("POST /upload", uploadStack(http.HandlerFunc(uploadHandler.UploadFile)))
 	mux.Handle("POST /upload/image", uploadStack(http.HandlerFunc(uploadHandler.UploadImage)))
 	mux.Handle("POST /upload/video", uploadStack(http.HandlerFunc(uploadHandler.UploadVideo)))
 
-	// -- Files --
 	mux.Handle("GET /files", fileStack(http.HandlerFunc(uploadHandler.GetFiles)))
 	mux.Handle("GET /files/search", fileStack(http.HandlerFunc(uploadHandler.SearchFiles)))
 	mux.Handle("GET /files/stats", fileStack(http.HandlerFunc(uploadHandler.GetStorageStats)))
@@ -221,7 +165,6 @@ func main() {
 		Handler: wrappedMux,
 	}
 
-	// ShutDown
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 	go func() {

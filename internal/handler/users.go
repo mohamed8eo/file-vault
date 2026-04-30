@@ -28,28 +28,21 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/mohamed8eo/file-vault/internal/auth"
+	"github.com/mohamed8eo/file-vault/internal/config"
 	"github.com/mohamed8eo/file-vault/internal/db"
 )
 
 type Handler struct {
-	queries            *db.Queries
-	accessTokenSecret  string
-	refreshTokenSecret string
-	isProduction       bool
+	queries *db.Queries
+	config  *config.Config
 }
 
 const refreshTokenExpiry = 30 * 24 * time.Hour
 
-func NewHandler(queries *db.Queries,
-	accessTokenSecret string,
-	refreshTokenSecret string,
-	isProduction bool,
-) *Handler {
+func NewHandler(queries *db.Queries, cfg *config.Config) *Handler {
 	return &Handler{
-		queries:            queries,
-		accessTokenSecret:  accessTokenSecret,
-		refreshTokenSecret: refreshTokenSecret,
-		isProduction:       isProduction,
+		queries: queries,
+		config:  cfg,
 	}
 }
 
@@ -122,7 +115,7 @@ func (h *Handler) SignUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.accessTokenSecret == "" || h.refreshTokenSecret == "" {
+	if h.config.AccessTokenSecret == "" || h.config.RefreshTokenSecret == "" {
 		http.Error(w, "server misconfiguration", http.StatusInternalServerError)
 		return
 	}
@@ -279,7 +272,7 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 
 	refreshToken := cookie.Value
 
-	_, err = auth.ValidateJWT(h.refreshTokenSecret, refreshToken)
+	_, err = auth.ValidateJWT(h.config.RefreshTokenSecret, refreshToken)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
@@ -332,7 +325,7 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) generateTokens(userID string) (string, string, error) {
 	accessToken, err := auth.MakeToken(
 		string(auth.AccessToken),
-		h.accessTokenSecret,
+		h.config.AccessTokenSecret,
 		userID,
 		15*time.Minute,
 	)
@@ -342,7 +335,7 @@ func (h *Handler) generateTokens(userID string) (string, string, error) {
 
 	refreshToken, err := auth.MakeToken(
 		string(auth.RefreshToken),
-		h.refreshTokenSecret,
+		h.config.RefreshTokenSecret,
 		userID,
 		30*24*time.Hour,
 	)
@@ -358,7 +351,7 @@ func (h *Handler) setRefreshCookie(w http.ResponseWriter, token string, expiresA
 		Name:     "refresh_token",
 		Value:    token,
 		HttpOnly: true,
-		Secure:   h.isProduction,
+		Secure:   h.config.IsProduction,
 		SameSite: http.SameSiteLaxMode,
 		Path:     "/",
 		Expires:  expiresAt,

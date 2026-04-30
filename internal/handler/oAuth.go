@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -16,21 +15,21 @@ import (
 	"golang.org/x/oauth2/google"
 )
 
-func googleOAuthConfig() *oauth2.Config {
+func (h *Handler) googleOAuthConfig() *oauth2.Config {
 	return &oauth2.Config{
-		ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
-		ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
-		RedirectURL:  os.Getenv("GOOGLE_REDIRECT_URL"),
+		ClientID:     h.config.GoogleClientID,
+		ClientSecret: h.config.GoogleClientSecret,
+		RedirectURL:  h.config.GoogleRedirectURL,
 		Scopes:       []string{"email", "profile"},
 		Endpoint:     google.Endpoint,
 	}
 }
 
-func githubOAuthConfig() *oauth2.Config {
+func (h *Handler) githubOAuthConfig() *oauth2.Config {
 	return &oauth2.Config{
-		ClientID:     os.Getenv("GITHUB_CLIENT_ID"),
-		ClientSecret: os.Getenv("GITHUB_CLIENT_SECRET"),
-		RedirectURL:  os.Getenv("GITHUB_REDIRECT_URL"),
+		ClientID:     h.config.GithubClientID,
+		ClientSecret: h.config.GithubClientSecret,
+		RedirectURL:  h.config.GithubRedirectURL,
 		Scopes:       []string{"user:email"},
 		Endpoint:     github.Endpoint,
 	}
@@ -49,7 +48,7 @@ func (h *Handler) GoogleLogin(w http.ResponseWriter, r *http.Request) {
 	if cli == "true" {
 		state = "cli"
 	}
-	url := googleOAuthConfig().AuthCodeURL(state, oauth2.AccessTypeOffline)
+	url := h.googleOAuthConfig().AuthCodeURL(state, oauth2.AccessTypeOffline)
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }
 
@@ -69,7 +68,7 @@ func (h *Handler) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cfg := googleOAuthConfig()
+	cfg := h.googleOAuthConfig()
 	token, err := cfg.Exchange(context.Background(), code)
 	if err != nil {
 		http.Error(w, "failed to exchange code", http.StatusInternalServerError)
@@ -108,7 +107,7 @@ func (h *Handler) GithubLogin(w http.ResponseWriter, r *http.Request) {
 	if cli == "true" {
 		state = "cli"
 	}
-	url := githubOAuthConfig().AuthCodeURL(state, oauth2.AccessTypeOffline)
+	url := h.githubOAuthConfig().AuthCodeURL(state, oauth2.AccessTypeOffline)
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }
 
@@ -128,7 +127,7 @@ func (h *Handler) GithubCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cfg := githubOAuthConfig()
+	cfg := h.githubOAuthConfig()
 	token, err := cfg.Exchange(context.TODO(), code)
 	if err != nil {
 		http.Error(w, "failed to exchange code", http.StatusInternalServerError)
