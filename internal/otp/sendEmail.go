@@ -83,8 +83,12 @@ func SendOTPEmail(to, otp string) error {
 		return fmt.Errorf("failed to marshal email: %w", err)
 	}
 
-	// Mailtrap Inbox API endpoint
-	url := fmt.Sprintf("https://mailtrap.io/api/v1/inboxes/%s/messages", mailtrapInboxID)
+	// Mailtrap Transactional API - using correct endpoint
+	url := "https://send.api.mailtrap.net/"
+	
+	// Or try sandbox: "https://sandbox.api.mailtrap.io/send"
+	
+	slog.Info("Sending OTP via Mailtrap Transactional API", "to", to)
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
