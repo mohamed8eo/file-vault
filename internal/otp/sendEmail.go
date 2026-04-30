@@ -13,8 +13,23 @@ func SendOTPEmail(to, otp string) error {
 	smtpPass := os.Getenv("SMTP_PASS")
 	smtpHost := os.Getenv("SMTP_HOST")
 	smtpPort := os.Getenv("SMTP_PORT")
+	devMode := os.Getenv("DEV_MODE") == "true"
 
-	// Log for debugging
+	// Development mode: print OTP to console instead of sending email
+	if devMode {
+		slog.Info("📧 DEV MODE: OTP Email (use this code)",
+			"to", to,
+			"otp", otp,
+			"expires", "10 minutes")
+		fmt.Printf("\n╔════════════════════════════════════════════╗\n")
+		fmt.Printf("║  📧 DEV MODE - OTP CODE                    ║\n")
+		fmt.Printf("║  To: %s                          ║\n", to)
+		fmt.Printf("║  OTP: %s                          ║\n", otp)
+		fmt.Printf("║  Expires: 10 minutes                      ║\n")
+		fmt.Printf("╚════════════════════════════════════════════╝\n\n")
+		return nil
+	}
+
 	slog.Info("SMTP Configuration", "host", smtpHost, "port", smtpPort, "user", smtpUser)
 
 	if smtpUser == "" || smtpPass == "" {
