@@ -170,40 +170,44 @@ func main() {
 
 	authMiddleware := middleware.Auth(cfg.accessTokenSecret)
 
-	// Customize RateLimit
-	loginRateLimit := middleware.RateLimit(rdb, 10, time.Minute)
-	uploadRateLimit := middleware.RateLimit(rdb, 20, time.Minute)
-	generalRateLimit := middleware.RateLimit(rdb, 100, time.Minute)
+	loginRL := middleware.RateLimit(rdb, 10, time.Minute)
+	uploadRL := middleware.RateLimit(rdb, 20, time.Minute)
+	generalRL := middleware.RateLimit(rdb, 100, time.Minute)
 
-	mux.Handle("GET /health", generalRateLimit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// Prebuilt stacks
+	loginStack := middleware.CreateStack(loginRL)
+	uploadStack := middleware.CreateStack(uploadRL, authMiddleware)
+	fileStack := middleware.CreateStack(generalRL, authMiddleware)
+
+	mux.Handle("GET /health", generalRL(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("OK"))
 	})))
 
-	// authentication route.
-	mux.Handle("POST /auth/sign-up", loginRateLimit(http.HandlerFunc(auth.SignUp)))
-	mux.Handle("POST /auth/login", loginRateLimit(http.HandlerFunc(auth.Login)))
-	mux.Handle("POST /auth/refresh", loginRateLimit(http.HandlerFunc(auth.Refresh)))
-	mux.Handle("POST /auth/logout", loginRateLimit(http.HandlerFunc(auth.Logout)))
+	// -- Auth --
+	mux.Handle("POST /auth/sign-up", loginStack(http.HandlerFunc(auth.SignUp)))
+	mux.Handle("POST /auth/login", loginStack(http.HandlerFunc(auth.Login)))
+	mux.Handle("POST /auth/refresh", loginStack(http.HandlerFunc(auth.Refresh)))
+	mux.Handle("POST /auth/logout", loginStack(http.HandlerFunc(auth.Logout)))
 
-	// oAuth route
-	mux.Handle("GET /auth/google", loginRateLimit(http.HandlerFunc(auth.GoogleLogin)))
-	mux.Handle("GET /auth/google/callback", loginRateLimit(http.HandlerFunc(auth.GoogleCallback)))
-	mux.Handle("GET /auth/github", loginRateLimit(http.HandlerFunc(auth.GithubLogin)))
-	mux.Handle("GET /auth/github/callback", loginRateLimit(http.HandlerFunc(auth.GithubCallback)))
+	// -- OAuth --
+	mux.Handle("GET /auth/google", loginStack(http.HandlerFunc(auth.GoogleLogin)))
+	mux.Handle("GET /auth/google/callback", loginStack(http.HandlerFunc(auth.GoogleCallback)))
+	mux.Handle("GET /auth/github", loginStack(http.HandlerFunc(auth.GithubLogin)))
+	mux.Handle("GET /auth/github/callback", loginStack(http.HandlerFunc(auth.GithubCallback)))
 
-	// upload route.
-	mux.Handle("POST /upload", uploadRateLimit(authMiddleware(http.HandlerFunc(uploadHandler.UploadFile))))
-	mux.Handle("POST /upload/image", uploadRateLimit(authMiddleware(http.HandlerFunc(uploadHandler.UploadImage))))
-	mux.Handle("POST /upload/video", uploadRateLimit(authMiddleware(http.HandlerFunc(uploadHandler.UploadVideo))))
-	mux.Handle("GET /files", generalRateLimit(authMiddleware(http.HandlerFunc(uploadHandler.GetFiles))))
-	mux.Handle("GET /files/search", generalRateLimit(authMiddleware(http.HandlerFunc(uploadHandler.SearchFiles))))
-	mux.Handle("GET /files/stats", generalRateLimit(authMiddleware(http.HandlerFunc(uploadHandler.GetStorageStats))))
-	mux.Handle("GET /files/{id}", generalRateLimit(authMiddleware(http.HandlerFunc(uploadHandler.GetFileByID))))
-	mux.Handle("DELETE /files/{id}", generalRateLimit(authMiddleware(http.HandlerFunc(uploadHandler.DeleteFile))))
-	mux.Handle("POST /files/delete", generalRateLimit(authMiddleware(http.HandlerFunc(uploadHandler.DeleteFiles))))
+	// -- Upload --
+	mux.Handle("POST /upload", uploadStack(http.HandlerFunc(uploadHandler.UploadFile)))
+	mux.Handle("POST /upload/image", uploadStack(http.HandlerFunc(uploadHandler.UploadImage)))
+	mux.Handle("POST /upload/video", uploadStack(http.HandlerFunc(uploadHandler.UploadVideo)))
 
-	// wrap entire mux with logging + request ID middleware
-	// wrappedMux := middleware.Logging(middleware.RequestID(mux))
+	// -- Files --
+	mux.Handle("GET /files", fileStack(http.HandlerFunc(uploadHandler.GetFiles)))
+	mux.Handle("GET /files/search", fileStack(http.HandlerFunc(uploadHandler.SearchFiles)))
+	mux.Handle("GET /files/stats", fileStack(http.HandlerFunc(uploadHandler.GetStorageStats)))
+	mux.Handle("GET /files/{id}", fileStack(http.HandlerFunc(uploadHandler.GetFileByID)))
+	mux.Handle("DELETE /files/{id}", fileStack(http.HandlerFunc(uploadHandler.DeleteFile)))
+	mux.Handle("POST /files/delete", fileStack(http.HandlerFunc(uploadHandler.DeleteFiles)))
+
 	logCh := middleware.StartLogWorker(dbQueries)
 	wrappedMux := middleware.RequestID(middleware.Logging(logCh)(mux))
 
