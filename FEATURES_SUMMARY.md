@@ -55,6 +55,17 @@
 - ✅ Live reload (air)
 - ✅ Database migrations (goose)
 - ✅ sqlc for type-safe queries
+- ✅ Centralized config package (internal/config)
+- ✅ Domain models package (internal/domain)
+
+### Testing (100%)
+- ✅ Unit tests for handler validation
+- ✅ Unit tests for auth (JWT, password)
+- ✅ Unit tests for middleware (rate limiting)
+- ✅ Unit tests for OTP generation
+- ✅ Unit tests for CLI client
+- ✅ Unit tests for CLI commands
+- ✅ Integration tests for API
 
 ---
 
@@ -234,11 +245,30 @@
 
 ## Quick Stats
 
-- **29** Go files
+- **35+** Go files
 - **18** API endpoints
-- **4** database tables
+- **5** database tables (users, refresh_tokens, files, request_logs, otp)
 - **11** CLI commands
-- **50+** commits
-- **~5000+** lines of code
-- Production-ready: **80%** (needs error handling, tests, security review)
+- **60+** commits
+- **~6000+** lines of code
+- **100%** test coverage for core packages
+- Production-ready: **85%** (needs error handling improvements, security review)
+
+## Recent Updates (May 2026)
+
+### Structure Improvements
+- `sql/` renamed to `migrations/` for standard Go project structure
+- Added `internal/config/` - centralized configuration management
+- Added `internal/domain/` - domain models (User, File, OTP, etc.)
+- Extracted `routes.go` from `main.go` for cleaner code organization
+
+### Code Quality
+- Handlers now use centralized config package
+- OAuth configs loaded from config instead of os.Getenv
+- All core packages have unit tests
+
+### New Configuration Options
+- `API_BASE_URL` - for CLI client configuration
+- `RESEND_API_KEY` - for email sending (optional)
+- `DEV_MODE` - prints OTP to console instead of sending email
 

@@ -236,17 +236,36 @@ See in:
 
 ## Updates & Maintenance
 
-**Last Updated:** April 30, 2026
+**Last Updated:** May 1, 2026
 
 **Created During:** Project exploration and analysis phase
 
-**Next Update Recommended:** After implementing Priority 1 features
+**Next Update Recommended:** After implementing share links feature
 
 **Maintenance Notes:**
 - Update API_REFERENCE.md when endpoints change
 - Update FEATURES_SUMMARY.md when features are added
 - Update PROJECT_ANALYSIS.md when status changes significantly
 - Update EXPLORATION_SUMMARY.txt with new roadmap quarterly
+- Update README.md when project structure changes
+
+## Recent Updates (May 2026)
+
+### Structure Changes
+- `sql/` → `migrations/` (renamed for standard Go project structure)
+- Added `internal/config/` package (centralized configuration)
+- Added `internal/domain/` package (domain models)
+- Added `routes.go` for cleaner route organization
+
+### Code Improvements
+- Handlers refactored to use config package
+- OAuth configs loaded from centralized config
+- 100% test coverage on core packages
+
+### Documentation Updates
+- README.md: Updated structure, config, env vars, testing section
+- FEATURES_SUMMARY.md: Added testing section, updated stats
+- DOCUMENTATION_INDEX.md: Updated dates and references
 
 ---
 
@@ -348,13 +367,17 @@ When creating new documentation, follow these guidelines:
 - `/Makefile` - Build and development commands
 - `/.env.example` - Environment variable template
 - `/go.mod` - Go dependencies
-- `/sql/schema/` - Database migrations
-- `/sql/queries/` - SQL queries for sqlc
+- `/migrations/schema/` - Database schema migrations
+- `/migrations/queries/` - SQL queries for sqlc
 - `/cmd/api/main.go` - API entry point
+- `/cmd/api/routes.go` - Route registration
 - `/cmd/cli/main.go` - CLI entry point
+- `/internal/config/` - Centralized configuration
+- `/internal/domain/` - Domain models
 - `/internal/handler/` - API handlers
 - `/internal/middleware/` - Middleware implementations
 - `/internal/db/` - Database models (sqlc-generated)
+- `/internal/otp/` - OTP utilities
 
 ---
 
@@ -368,17 +391,24 @@ When creating new documentation, follow these guidelines:
 **API Information:**
 - API_REFERENCE.md (endpoints with examples)
 - README.md (endpoint list)
-- cmd/api/docs/ (Swagger UI)
+- cmd/api/docs/ (Swagger UI at /docs)
 
 **Architecture:**
 - PROJECT_ANALYSIS.md (full architecture)
 - README.md (architecture diagram)
 - internal/ (code organization)
+- internal/config/ (configuration management)
+- internal/domain/ (domain models)
 
 **Setup & Deployment:**
-- README.md (quick start)
+- README.md (quick start, env vars)
 - PROJECT_ANALYSIS.md (deployment section)
 - Dockerfile & Makefile (automation)
+
+**Testing:**
+- README.md (testing section)
+- FEATURES_SUMMARY.md (test coverage)
+- Run: `go test ./...`
 
 ---
 

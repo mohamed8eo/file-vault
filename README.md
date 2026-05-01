@@ -9,7 +9,9 @@ Supports user sign-up/login (JWT + OAuth), secure file uploads to S3 with CloudF
 file-vault/
 ├── cmd/
 │   ├── api/
-│   │   └── main.go           # Main entry point, HTTP server
+│   │   ├── main.go           # Main entry point, HTTP server
+│   │   ├── routes.go         # Route registration
+│   │   └── docs/             # Swagger UI static files
 │   └── cli/
 │       ├── main.go           # CLI entry point
 │       └── cmd/              # CLI commands (auth, files)
@@ -20,21 +22,30 @@ file-vault/
 │   ├── client/               # CLI client for API calls
 │   │   ├── client.go         # Token management, HTTP client
 │   │   └── files.go          # File operations (upload, list, get, delete)
+│   ├── config/               # Centralized configuration management
+│   │   └── config.go         # Loads env vars, provides *Config struct
 │   ├── db/                   # sqlc-generated DB code
 │   │   ├── db.go
 │   │   ├── models.go
 │   │   └── *.sql.go
+│   ├── domain/               # Domain models
+│   │   └── models.go         # User, File, OTP, TokenPair structs
 │   ├── handler/              # HTTP handlers
 │   │   ├── users.go          # SignUp, Login, Refresh, Logout
 │   │   ├── oAuth.go          # Google & GitHub OAuth
 │   │   ├── upload_files.go   # File upload & management
+│   │   ├── otp.go            # OTP generation & verification
+│   │   ├── validation.go     # Email, password, name validators
 │   │   └── doc.go            # Package documentation
-│   └── middleware/           # HTTP middleware
-│       ├── auth.go           # JWT validation
-│       ├── rateLimit.go      # Redis-based rate limiting
-│       ├── logging.go        # Request logging
-│       └── requestid.go      # Request ID tracking
-├── sql/
+│   ├── middleware/           # HTTP middleware
+│   │   ├── auth.go           # JWT validation
+│   │   ├── rateLimit.go      # Redis-based rate limiting
+│   │   ├── logging.go        # Request logging
+│   │   └── requestid.go      # Request ID tracking
+│   └── otp/                  # OTP utilities
+│       ├── generateOTP.go    # OTP generation
+│       └── sendEmail.go      # Email sending (DevMode support)
+├── migrations/
 │   ├── queries/              # SQL queries for sqlc
 │   └── schema/               # Database schema
 ├── go.mod / go.sum
@@ -47,34 +58,38 @@ file-vault/
 ┌─────────────────────────────────────────────────────────────────┐
 │                         file-vault API                          │
 │                                                                 │
-│  ┌──────────┐    ┌─────────────────┐    ┌───────────────────┐   │
-│  │          │    │   Middleware    │    │    Handlers       │   │
-│  │  CLI /   │───▶│  • Request ID   │───▶│  • SignUp/Login   │   │
-│  │  Client  │    │  • Logging      │    │  • OAuth (Google) │   │
-│  │          │◀───│  • Auth (JWT)   │◀───│  • Refresh/Logout │   │
-│  │  curl /  │    │  • Rate limit   │    │  • Upload(File)   │   │
-│  │ browser  │    └────────┬────────┘    │  • Upload(Image) │   │
-│  └──────────┘             │             │  • Upload(Video) │   │
-│                           │             │  • GetFiles      │   │
-│                    ┌──────▼──────┐      │  • DeleteFile    │   │
-│                    │    Redis    │      └────────┬──────────┘   │
-│                    │  (sliding   │               │              │
-│                    │   window)   │        ┌──────▼──────┐       │
-│                    └─────────────┘        │  PostgreSQL │       │
-│                                            │  (users,    │       │
-│                                            │   tokens,   │       │
-│                                            │   files)    │       │
-│                                            └─────────────┘       │
-│                                                  │               │
-│                                           ┌──────▼──────┐        │
-│                                           │   AWS S3    │        │
-│                                           │ (files)     │        │
-│                                           └──────┬──────┘        │
-│                                                  │               │
-│                                           ┌──────▼──────┐        │
-│                                           │ CloudFront  │        │
-│                                           │ (streaming) │        │
-│                                           └─────────────┘        │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │                    Config Package                        │   │
+│  │  (internal/config/config.go - centralized config)       │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                              │                                  │
+│  ┌──────────┐    ┌──────────▼──────────┐    ┌────────────────┐ │
+│  │          │    │     Middleware      │    │    Handlers     │ │
+│  │  CLI /   │───▶│  • Request ID       │───▶│  • SignUp/Login │ │
+│  │  Client  │    │  • Logging          │    │  • OAuth        │ │
+│  │          │◀───│  • Auth (JWT)       │◀───│  • Refresh/Logout││
+│  │  curl /  │    │  • Rate limit       │    │  • Upload       │ │
+│  │ browser  │    └──────────┬───────────┘    │  • Files        │ │
+│  └──────────┘               │                │  • OTP          │ │
+│                    ┌─────────▼─────────┐     └────────┬────────┘ │
+│                    │      Redis         │              │          │
+│                    │ (rate limiting)    │       ┌──────▼──────┐   │
+│                    └────────────────────┘       │  PostgreSQL │   │
+│                                                   │  (users,    │   │
+│                                                   │   tokens,   │   │
+│                                                   │   files,    │   │
+│                                                   │   otp)      │   │
+│                                                   └─────────────┘   │
+│                                                         │          │
+│                                                  ┌──────▼──────┐    │
+│                                                  │   AWS S3    │    │
+│                                                  │ (files)     │    │
+│                                                  └──────┬──────┘    │
+│                                                         │          │
+│                                                  ┌──────▼──────┐    │
+│                                                  │ CloudFront  │    │
+│                                                  │ (streaming) │    │
+│                                                  └─────────────┘    │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -202,11 +217,16 @@ Size values are in bytes. Use the CLI's `files stats` command for a formatted ta
 # Database
 DB_URL=postgres://user:pass@localhost:5432/db
 
-# JWT Secrets (base64 encoded)
+# Server
+PORT=3000
+IS_PRODUCTION=false
+API_BASE_URL=http://localhost:3000  # For CLI client
+
+# JWT Secrets (base64 encoded, generate with: go run -e "import 'encoding/base64'; b, _ := base64.StdEncoding.EncodeString(make([]byte, 32)); print(b)")
 ACCESS_TOKEN_SECRET=your-access-secret
 REFRESH_TOKEN_SECRET=your-refresh-secret
 
-# Redis
+# Redis (required for rate limiting)
 REDIS_URL=redis://localhost:6379
 
 # AWS S3
@@ -223,9 +243,9 @@ GITHUB_CLIENT_ID=your-github-client-id
 GITHUB_CLIENT_SECRET=your-github-client-secret
 GITHUB_REDIRECT_URL=http://localhost:3000/auth/github/callback
 
-# App
-PORT=3000
-IS_PRODUCTION=false
+# Email (Resend) - Optional, DEV_MODE prints OTP to console
+RESEND_API_KEY=your-resend-api-key
+DEV_MODE=true  # Set to true for development (prints OTP to console instead of sending email)
 ```
 
 ## CLI Commands
@@ -288,9 +308,35 @@ make test
 - **Language**: Go 1.22+
 - **Database**: PostgreSQL (via pgx/v5)
 - **ORM**: sqlc
+- **Config**: godotenv
 - **Cache/Rate Limit**: Redis (go-redis)
 - **Storage**: AWS S3
 - **CDN**: CloudFront
 - **Auth**: JWT (golang-jwt), Argon2id
 - **OAuth**: Google, GitHub
 - **HTTP**: stdlib net/http
+- **CLI**: Cobra
+- **Testing**: Built-in Go testing
+
+## Testing
+
+```bash
+# Run all tests
+make test
+# or
+go test ./...
+
+# Run specific package tests
+go test ./internal/handler/...
+go test ./internal/auth/...
+go test ./cmd/cli/cmd/...
+```
+
+**Test Coverage:**
+- `internal/handler/` - Handler validation and auth tests
+- `internal/auth/` - JWT and password hashing tests
+- `internal/middleware/` - Rate limiting and auth middleware tests
+- `internal/otp/` - OTP generation tests
+- `internal/client/` - CLI client tests
+- `cmd/cli/cmd/` - CLI command tests
+- `cmd/api/` - API integration tests
