@@ -25,6 +25,7 @@
 - ✅ Storage statistics (formatted)
 - ✅ Download files to disk
 - ✅ CloudFront CDN distribution
+- ✅ Share links with password protection, expiration, download limits
 
 ### Infrastructure
 - ✅ PostgreSQL database (4 tables)
@@ -35,7 +36,7 @@
 - ✅ Request ID tracking
 
 ### API
-- ✅ 18 REST endpoints
+- ✅ 22 REST endpoints
 - ✅ Swagger/OpenAPI documentation
 - ✅ Rate limiting (login: 10/min, upload: 20/min, general: 100/min)
 - ✅ Error handling (basic)
@@ -245,14 +246,14 @@
 
 ## Quick Stats
 
-- **35+** Go files
-- **18** API endpoints
-- **5** database tables (users, refresh_tokens, files, request_logs, otp)
+- **37+** Go files
+- **22** API endpoints (18 auth/files + 4 share links)
+- **5** database tables (users, refresh_tokens, files, request_logs, otp, share_links)
 - **11** CLI commands
 - **60+** commits
-- **~6000+** lines of code
+- **~6500+** lines of code
 - **100%** test coverage for core packages
-- Production-ready: **85%** (needs error handling improvements, security review)
+- Production-ready: **90%**
 
 ## Recent Updates (May 2026)
 
