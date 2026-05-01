@@ -562,6 +562,140 @@ Delete multiple files at once.
 
 ---
 
+## Share Links Endpoints
+
+### 19. Create Share Link
+**POST** `/files/{id}/share`
+
+**[Requires Auth]**
+
+Create a shareable link for a file with optional expiration, password, and download limits.
+
+**Path Parameters:**
+- `id` (required): File UUID
+
+**Request:**
+```json
+{
+  "expires_at": "2025-05-15T12:00:00Z",
+  "password": "optionalpassword123",
+  "max_downloads": 10
+}
+```
+
+**Note:** All fields are optional. If `expires_at` is not provided, link never expires. If `password` is not provided, no password protection. If `max_downloads` is not provided, unlimited downloads.
+
+**Response (201 Created):**
+```json
+{
+  "message": "share link created",
+  "share_url": "http://localhost:3000/s/fv-abc123def456ghi78",
+  "token": "fv-abc123def456ghi78",
+  "expires_at": "2025-05-15T12:00:00Z",
+  "max_downloads": 10,
+  "file_name": "document.pdf"
+}
+```
+
+**Status Codes:**
+- `201`: Share link created
+- `400`: Invalid request
+- `401`: Unauthorized
+- `404`: File not found
+- `500`: Server error
+
+---
+
+### 20. List Share Links
+**GET** `/files/{id}/shares`
+
+**[Requires Auth]**
+
+Get all share links for a specific file.
+
+**Path Parameters:**
+- `id` (required): File UUID
+
+**Response (200 OK):**
+```json
+[
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "token": "fv-abc123def456ghi78",
+    "share_url": "http://localhost:3000/s/fv-abc123def456ghi78",
+    "expires_at": "2025-05-15T12:00:00Z",
+    "has_password": true,
+    "max_downloads": 10,
+    "download_count": 3,
+    "created_at": "2026-05-01T10:30:00Z"
+  }
+]
+```
+
+**Status Codes:**
+- `200`: Success
+- `401`: Unauthorized
+- `404`: File not found
+
+---
+
+### 21. Access Shared File
+**GET** `/share/{token}`
+
+**[No Auth Required - Public]**
+
+Access a shared file via token.
+
+**Path Parameters:**
+- `token` (required): Share link token
+
+**Query Parameters (optional):**
+- `password` (if link is password protected): Send as query param or body
+
+**Response (200 OK):**
+```json
+{
+  "file_name": "document.pdf",
+  "file_size": 1048576,
+  "file_url": "https://d1234567890.cloudfront.net/files/document.pdf",
+  "downloads": 4,
+  "expires_at": "2025-05-15T12:00:00Z"
+}
+```
+
+**Status Codes:**
+- `200`: Success
+- `400`: Invalid token
+- `401`: Password required
+- `404`: Share link not found
+- `410`: Share link expired
+
+---
+
+### 22. Delete Share Link
+**DELETE** `/share/{id}`
+
+**[Requires Auth]**
+
+Revoke a share link.
+
+**Path Parameters:**
+- `id` (required): Share link UUID
+
+**Response (200 OK):**
+```json
+{
+  "message": "share link deleted"
+}
+```
+
+**Status Codes:**
+- `200`: Success
+- `401`: Unauthorized
+- `404`: Share link not found
+
+---
+
 ## Health Check
 
 ### 18. Health Check

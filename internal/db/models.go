@@ -35,6 +35,18 @@ type RequestLog struct {
 	CreatedAt pgtype.Timestamp
 }
 
+type ShareLink struct {
+	ID            pgtype.UUID
+	FileID        pgtype.UUID
+	Token         string
+	CreatedBy     pgtype.UUID
+	ExpiresAt     pgtype.Timestamptz
+	PasswordHash  pgtype.Text
+	MaxDownloads  pgtype.Int4
+	DownloadCount pgtype.Int4
+	CreatedAt     pgtype.Timestamptz
+}
+
 type User struct {
 	ID             pgtype.UUID
 	Email          string

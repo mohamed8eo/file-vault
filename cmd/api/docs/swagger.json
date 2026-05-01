@@ -380,6 +380,107 @@
                 }
             }
         },
+        "/files/{id}/share": {
+            "post": {
+                "tags": ["Share Links"],
+                "summary": "Create share link",
+                "description": "Create a shareable link for a file with optional expiration, password, and download limits",
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "security": [{"ApiKeyAuth": []}],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "type": "string"
+                    },
+                    {
+                        "name": "share",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "expires_at": {"type": "string", "format": "date-time"},
+                                "password": {"type": "string"},
+                                "max_downloads": {"type": "integer"}
+                            }
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {"description": "Share link created"},
+                    "400": {"description": "Invalid request"},
+                    "401": {"description": "Unauthorized"},
+                    "404": {"description": "File not found"}
+                }
+            }
+        },
+        "/files/{id}/shares": {
+            "get": {
+                "tags": ["Share Links"],
+                "summary": "List share links for file",
+                "description": "Get all share links created by user for a specific file",
+                "produces": ["application/json"],
+                "security": [{"ApiKeyAuth": []}],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {"description": "List of share links"},
+                    "401": {"description": "Unauthorized"}
+                }
+            }
+        },
+        "/share/{token}": {
+            "get": {
+                "tags": ["Share Links"],
+                "summary": "Get shared file",
+                "description": "Access a shared file via token (public, no auth required)",
+                "produces": ["application/json"],
+                "parameters": [
+                    {
+                        "name": "token",
+                        "in": "path",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {"description": "File details"},
+                    "400": {"description": "Invalid token"},
+                    "404": {"description": "Share link not found"}
+                }
+            }
+        },
+        "/share/{id}": {
+            "delete": {
+                "tags": ["Share Links"],
+                "summary": "Delete share link",
+                "description": "Revoke a share link",
+                "produces": ["application/json"],
+                "security": [{"ApiKeyAuth": []}],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "200": {"description": "Share link deleted"},
+                    "401": {"description": "Unauthorized"},
+                    "404": {"description": "Share link not found"}
+                }
+            }
+        },
         "/health": {
             "get": {
                 "tags": ["Health"],

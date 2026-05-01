@@ -9,7 +9,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-func registerRoutes(mux *http.ServeMux, auth *handler.Handler, uploadHandler *handler.UploadHanlder, rdb *redis.Client, accessTokenSecret string) {
+func registerRoutes(mux *http.ServeMux, auth *handler.Handler, uploadHandler *handler.UploadHanlder, shareLinkHandler *handler.ShareLinkHandler, rdb *redis.Client, accessTokenSecret string) {
 
 	authMiddleware := middleware.Auth(accessTokenSecret)
 
@@ -50,4 +50,12 @@ func registerRoutes(mux *http.ServeMux, auth *handler.Handler, uploadHandler *ha
 	mux.Handle("GET /files/{id}", fileStack(http.HandlerFunc(uploadHandler.GetFileByID)))
 	mux.Handle("DELETE /files/{id}", fileStack(http.HandlerFunc(uploadHandler.DeleteFile)))
 	mux.Handle("POST /files/delete", fileStack(http.HandlerFunc(uploadHandler.DeleteFiles)))
+
+	// Share Links
+	mux.Handle("POST /files/{id}/share", fileStack(http.HandlerFunc(shareLinkHandler.CreateShareLink)))
+	mux.Handle("GET /files/{id}/shares", fileStack(http.HandlerFunc(shareLinkHandler.ListShareLinks)))
+	mux.Handle("DELETE /share/{id}", fileStack(http.HandlerFunc(shareLinkHandler.DeleteShareLink)))
+
+	// Public share access
+	mux.Handle("GET /share/{token}", generalRL(http.HandlerFunc(shareLinkHandler.GetSharedFile)))
 }

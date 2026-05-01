@@ -113,6 +113,7 @@ func main() {
 		cfg.CloudFrontURL,
 		s3Client,
 	)
+	shareLinkHandler := handler.NewShareLinkHandler(dbQueries, cfg)
 
 	parseRedisURL, err := redis.ParseURL(cfg.RedisURL)
 	if err != nil {
@@ -121,7 +122,7 @@ func main() {
 
 	rdb := redis.NewClient(parseRedisURL)
 
-	registerRoutes(mux, auth, uploadHandler, rdb, cfg.AccessTokenSecret)
+	registerRoutes(mux, auth, uploadHandler, shareLinkHandler, rdb, cfg.AccessTokenSecret)
 
 	logCh := middleware.StartLogWorker(dbQueries)
 	wrappedMux := middleware.RequestID(middleware.Logging(logCh)(mux))
